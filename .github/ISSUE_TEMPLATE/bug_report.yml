@@ -1,0 +1,42 @@
+name: Bug report
+description: Launch Doctor crashed, printed something wrong, or a flag doesn't work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! If Launch Doctor flagged something that is actually fine, use the **False positive** template instead.
+        Please remove any real API keys or passwords from what you paste.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you run, what did you expect, and what happened instead?
+      placeholder: I ran `npx launch-doctor --sarif out.sarif` and ...
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The terminal output or error message (run with NO_COLOR=1 to drop color codes).
+      render: text
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: A minimal project (file names and contents) that shows the problem.
+  - type: input
+    id: version
+    attributes:
+      label: Launch Doctor version
+      description: Output of `npx launch-doctor --version`
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Node.js version and OS
+      placeholder: Node 22.12, Windows 11
+    validations:
+      required: true

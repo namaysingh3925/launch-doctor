@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest a new check, provider or option.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should Launch Doctor catch?
+      description: Describe the launch mistake and what goes wrong for real users when it happens.
+    validations:
+      required: true
+  - type: textarea
+    id: detection
+    attributes:
+      label: How could it be detected?
+      description: Packages, file names or code patterns that show the problem (or show it's handled).
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      description: A minimal code example that should be flagged, and one that shouldn't.
+      render: text
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything else?
+      description: Links, docs, or other tools that check this.

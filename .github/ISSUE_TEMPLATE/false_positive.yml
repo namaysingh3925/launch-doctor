@@ -1,0 +1,40 @@
+name: False positive
+description: Launch Doctor reported a problem that isn't one.
+labels: [false positive]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! A small code snippet is the most useful thing you can send.
+        **Never paste real keys or passwords.** Replace them with something like `sk_live_REDACTED`.
+  - type: input
+    id: finding-id
+    attributes:
+      label: Finding id
+      description: Shown at the bottom of each fix in LAUNCH_FIXES.md, or as `id` in `--json` output.
+      placeholder: ai-endpoint-no-auth
+    validations:
+      required: true
+  - type: textarea
+    id: snippet
+    attributes:
+      label: Minimal code snippet
+      description: The smallest code (with its file path) that triggers the finding.
+      placeholder: |
+        // app/api/chat/route.ts
+        export async function POST(req) { ... }
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is this not a problem?
+      description: For example, "the route is protected by middleware in middleware.ts".
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Launch Doctor version
+      description: Output of `npx launch-doctor --version`
