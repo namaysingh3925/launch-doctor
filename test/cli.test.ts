@@ -181,3 +181,37 @@ test('--sarif writes SARIF 2.1.0 with one rule per finding id and one result per
   for (const r of runEntry.results) assert.ok(r.locations[0].physicalLocation.artifactLocation.uri, 'every result has a location');
   assert.match(run(['--help']).stdout, /--sarif <file>/);
 });
+
+test('--update-baseline records findings; later runs only fail on new ones', async () => {
+  const { writeFileSync } = await import('node:fs');
+  const dir = leaky();
+  const update = run([dir, '--offline', '--no-file', '--update-baseline']);
+  assert.equal(update.status, 0, update.stderr);
+  assert.match(update.stdout, /Saved \d+ findings to \.launchdoctor-baseline\.json/);
+  const saved = JSON.parse(readFileSync(join(dir, '.launchdoctor-baseline.json'), 'utf8'));
+  assert.ok(saved.findings.length > 0);
+  assert.ok(saved.findings.every((f: { fingerprint: string }) => /^[a-z0-9-]+\|[^|]*\|[0-9a-f]{16}$/.test(f.fingerprint)));
+
+  // Same problems: CI passes, findings are marked and collapsed.
+  assert.equal(run([dir, '--offline', '--ci']).status, 0);
+  const json = JSON.parse(run([dir, '--offline', '--json']).stdout);
+  const key = json.categories.flatMap((c: { findings: { id: string; baseline?: boolean }[] }) => c.findings).find((f: { id: string }) => f.id === 'stripe-live-key');
+  assert.equal(key.baseline, true);
+  assert.ok(json.counts.baseline > 0);
+  assert.match(run([dir, '--offline', '--no-file']).stdout, /existing issues? \(baseline\)/);
+
+  // The key moves down two lines: still the same finding.
+  const pay = readFileSync(join(dir, 'src/pay.ts'), 'utf8');
+  writeFileSync(join(dir, 'src/pay.ts'), `// payments\n\n${pay}`);
+  assert.equal(run([dir, '--offline', '--ci']).status, 0, 'moved lines still match the baseline');
+
+  // A new critical problem fails CI again.
+  writeFileSync(join(dir, 'src/new.ts'), `export const k2 = "${'sk_' + 'live_' + 'Zx8Kq2Wm5Np7Rt3Vb6Yc9Hd4'}";\n`);
+  assert.equal(run([dir, '--offline', '--ci']).status, 1);
+
+  // --no-baseline ignores the file entirely.
+  writeFileSync(join(dir, 'src/new.ts'), '');
+  assert.equal(run([dir, '--offline', '--ci']).status, 0);
+  assert.equal(run([dir, '--offline', '--ci', '--no-baseline']).status, 1);
+  assert.match(run(['--help']).stdout, /--update-baseline[\s\S]*--no-baseline/);
+});

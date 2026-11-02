@@ -12,6 +12,7 @@ function fence(text: string): string {
 function section(f: Finding, n: number): string {
   const parts = [`### ${n}. ${f.title}`, ''];
   if (f.location) parts.push(`**Where:** \`${shortWhere(f.location)}\``, '');
+  if (f.baseline) parts.push('_Existing issue, recorded in .launchdoctor-baseline.json._', '');
   parts.push(`**Why it matters:** ${f.why}`, '', '**Prompt to paste:**', '', fence(f.fixPrompt), '');
   parts.push(`<sub>Not relevant to your app? Add \`${f.id}\` to a \`.launchdoctorignore\` file.</sub>`, '');
   return parts.join('\n');

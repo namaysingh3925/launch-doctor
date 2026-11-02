@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { appendFileSync, existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
+import { applyBaseline, BASELINE_FILE, loadBaseline, writeBaseline } from './baseline.js';
 import { createDemoProject } from './demo.js';
 import { renderFixes } from './fixes.js';
 import { failingFindings } from './grade.js';
@@ -28,6 +29,8 @@ const HELP = `
     --fail-on <level>   With --ci, the lowest severity that fails: critical (default) or warning
     --only <ids>        Run only these categories (comma-separated)
     --skip <ids>        Skip these categories (comma-separated)
+    --update-baseline   Save today's findings to .launchdoctor-baseline.json as accepted
+    --no-baseline       Ignore .launchdoctor-baseline.json and show every finding
     --demo              Try it on a sample app full of mistakes
     -h, --help          Show this help
     -v, --version       Show the version
@@ -60,6 +63,8 @@ interface Args {
   only?: string[];
   skip?: string[];
   sarif?: string;
+  updateBaseline: boolean;
+  baseline: boolean;
   demo: boolean;
   help: boolean;
   version: boolean;
@@ -67,7 +72,8 @@ interface Args {
 
 function parseArgs(argv: string[]): Args {
   const args: Args = {
-    writeFile: true, json: false, offline: false, ci: false, failOn: 'critical', demo: false, help: false, version: false,
+    writeFile: true, json: false, offline: false, ci: false, failOn: 'critical', updateBaseline: false, baseline: true,
+    demo: false, help: false, version: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
@@ -83,6 +89,8 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--ci') args.ci = true;
     else if (a === '--demo') args.demo = true;
     else if (a === '--no-file') args.writeFile = false;
+    else if (a === '--update-baseline') args.updateBaseline = true;
+    else if (a === '--no-baseline') args.baseline = false;
     else if (a === '--domain') args.domain = cleanDomain(value());
     else if (a.startsWith('--domain=')) args.domain = cleanDomain(a.slice(9));
     else if (a === '--fail-on') args.failOn = severityArg(value());
@@ -154,7 +162,14 @@ async function main(): Promise<void> {
 
   let report;
   try {
-    report = await runDoctor(root, { offline: args.offline, domain: args.domain, only: args.only, skip: args.skip });
+    report = await runDoctor(root, {
+      offline: args.offline,
+      domain: args.domain,
+      only: args.only,
+      skip: args.skip,
+      // When updating, start from scratch so every current finding is saved.
+      baseline: args.baseline && !args.updateBaseline,
+    });
   } finally {
     // The demo project lives in a temp folder; always clean it up, even if the scan throws.
     if (args.demo) rmSync(root, { recursive: true, force: true });
@@ -162,6 +177,14 @@ async function main(): Promise<void> {
 
   if (report.filesScanned === 0) {
     fail(`No project files found in ${root}. Run this inside your app's folder.`);
+  }
+
+  if (args.updateBaseline) {
+    if (args.demo) fail('--update-baseline needs a real project folder, not --demo');
+    const saved = writeBaseline(root, report);
+    applyBaseline(report, loadBaseline(root) ?? new Set());
+    const msg = `Saved ${saved} finding${saved === 1 ? '' : 's'} to ${BASELINE_FILE}. Future runs (and --ci) only report new problems.`;
+    (args.json ? process.stderr : process.stdout).write(`\n  ${dim(msg)}\n`);
   }
 
   let fixFile: string | undefined;

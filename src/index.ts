@@ -1,3 +1,4 @@
+import { applyBaseline, fingerprint, loadBaseline } from './baseline.js';
 import { costsCheck } from './checks/costs.js';
 import { databaseCheck } from './checks/database.js';
 import { emailCheck } from './checks/email.js';
@@ -100,10 +101,12 @@ export async function runDoctor(root: string, options: Options = {}): Promise<Re
     });
   }
 
+  for (const c of categories) for (const f of c.findings) f.fingerprint = fingerprint(ctx, f);
+
   const summary = overall(categories);
   const knownIds = new Set(CHECKS.flatMap((c) => c.ids));
   const unknownIgnoreIds = [...ctx.ignoredIds].filter((id) => !knownIds.has(id)).sort();
-  return {
+  const report: Report = {
     tool: 'launch-doctor',
     version: version(),
     root: ctx.root,
@@ -117,6 +120,12 @@ export async function runDoctor(root: string, options: Options = {}): Promise<Re
     categories,
     generatedAt: new Date().toISOString(),
   };
+
+  if (options.baseline !== false) {
+    const baseline = loadBaseline(ctx.root);
+    if (baseline) applyBaseline(report, baseline);
+  }
+  return report;
 }
 
 export { ProjectContext } from './project.js';

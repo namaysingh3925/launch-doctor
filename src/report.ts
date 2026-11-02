@@ -81,9 +81,12 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
   }
   lines.push('');
 
+  // Baseline findings (already known and accepted) are collapsed into one line.
   const all = report.categories.flatMap((c) => c.findings);
-  const critical = all.filter((f) => f.severity === 'critical');
-  const warnings = all.filter((f) => f.severity === 'warning');
+  const fresh = all.filter((f) => !f.baseline);
+  const existing = all.length - fresh.length;
+  const critical = fresh.filter((f) => f.severity === 'critical');
+  const warnings = fresh.filter((f) => f.severity === 'warning');
 
   if (critical.length) {
     lines.push(`  ${bold(red(`MUST FIX BEFORE LAUNCH (${critical.length})`))}`, '');
@@ -92,6 +95,9 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
   if (warnings.length) {
     lines.push(`  ${bold(yellow(`SHOULD FIX (${warnings.length})`))}`, '');
     for (const f of warnings) lines.push(...findingBlock(f, width));
+  }
+  if (existing) {
+    lines.push(`  ${dim(`${plural(existing, 'existing issue')} (baseline) not shown. Use --no-baseline to list them.`)}`, '');
   }
 
   const passed = report.categories.flatMap((c) => c.passed);

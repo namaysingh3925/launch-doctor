@@ -109,6 +109,8 @@ npx launch-doctor [folder] [options]
   --fail-on <level>   With --ci, the lowest severity that fails: critical (default) or warning
   --only <ids>        Run only these categories (comma-separated)
   --skip <ids>        Skip these categories (comma-separated)
+  --update-baseline   Save today's findings to .launchdoctor-baseline.json as accepted
+  --no-baseline       Ignore .launchdoctor-baseline.json and show every finding
   --demo              Try it on a sample app full of mistakes
 ```
 
@@ -177,6 +179,16 @@ To silence one finding in one place, put a `launch-doctor-ignore <id>` comment o
 // launch-doctor-ignore stripe-test-key
 const STRIPE_TEST_KEY = 'sk_test_...'; // used only by the local seed script
 ```
+
+## Baseline: only fail on new problems
+
+Adding Launch Doctor to an existing project? Record what's there today and let CI fail only on new issues:
+
+```bash
+npx launch-doctor --update-baseline   # writes .launchdoctor-baseline.json (commit it)
+```
+
+Later runs mark matching findings as `baseline: true` in `--json`, show them as one "N existing issues (baseline)" line, and leave them out of `--ci` / `--fail-on`. Each finding is matched by its id, file and the text of the matched line, so it still matches when lines move. Use `--no-baseline` to see everything again.
 
 ## Privacy
 

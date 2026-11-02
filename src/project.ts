@@ -49,7 +49,7 @@ const SPECIAL_NAMES = new Set(['firestore.rules', 'storage.rules', 'database.rul
 
 const SKIP_FILES = new Set([
   'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lock', 'bun.lockb', 'npm-shrinkwrap.json',
-  'launch_fixes.md',
+  'launch_fixes.md', '.launchdoctor-baseline.json',
 ]);
 
 const MAX_FILES = 20_000;

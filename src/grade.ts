@@ -46,12 +46,12 @@ export function overall(categories: CategoryResult[]) {
         ? `Almost ready: ${plural(warning, 'thing')} to improve`
         : 'Looks ready to launch';
 
-  return { score, grade: toGrade(score), verdict, counts: { critical, warning, manual } };
+  return { score, grade: toGrade(score), verdict, counts: { critical, warning, manual, baseline: 0 } };
 }
 
-/** Findings at or above a severity level: the ones that should fail a CI run. */
+/** New findings at or above a severity level: the ones that should fail a CI run. Baseline findings don't count. */
 export function failingFindings(report: Report, failOn: Severity): Finding[] {
   return report.categories
     .flatMap((c) => c.findings)
-    .filter((f) => f.severity === 'critical' || failOn === 'warning');
+    .filter((f) => !f.baseline && (f.severity === 'critical' || failOn === 'warning'));
 }

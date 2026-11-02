@@ -44,6 +44,7 @@ export function renderSarif(report: Report, opts: SarifOptions = {}): string {
       ruleId: f.id,
       ruleIndex: ruleIndex.get(f.id),
       level: level(f),
+      baselineState: f.baseline ? 'unchanged' : 'new',
       message: { text: f.title },
       locations: [{ physicalLocation: { artifactLocation: { uri, uriBaseId: '%SRCROOT%' }, region } }],
     };

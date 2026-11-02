@@ -19,6 +19,10 @@ export interface Finding {
   location?: Location;
   /** A prompt the user can paste into Claude Code, Cursor, Lovable, Bolt... */
   fixPrompt: string;
+  /** Stable id for baselines: finding id + file + hash of the matched line. Set by runDoctor. */
+  fingerprint?: string;
+  /** True when this finding is in .launchdoctor-baseline.json (an existing, accepted issue). */
+  baseline?: boolean;
 }
 
 /** Something we can't see from the code, so the user has to check it. */
@@ -72,7 +76,8 @@ export interface Report {
   score: number;
   grade: Grade;
   verdict: string;
-  counts: { critical: number; warning: number; manual: number };
+  /** baseline: how many findings matched .launchdoctor-baseline.json. */
+  counts: { critical: number; warning: number; manual: number; baseline: number };
   categories: CategoryResult[];
   generatedAt: string;
 }
@@ -90,4 +95,6 @@ export interface Options {
   only?: string[];
   /** Skip these category ids. */
   skip?: string[];
+  /** Load .launchdoctor-baseline.json if present (default true). */
+  baseline?: boolean;
 }
