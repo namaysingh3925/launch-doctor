@@ -443,3 +443,31 @@ test('every id a check produces is listed in its ids array', async () => {
     }
   }
 });
+
+// ---- Item 13: the --demo temp folder is removed even when the scan throws ----
+
+test('the demo folder is deleted even if the scan crashes', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { readdirSync, mkdtempSync, writeFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const { fileURLToPath } = await import('node:url');
+  // A preload script that makes the file sort at the end of the scan throw, so runDoctor fails mid-scan.
+  const hookDir = mkdtempSync(join(tmpdir(), 'ld-hook-'));
+  const hook = join(hookDir, 'crash.mjs');
+  writeFileSync(
+    hook,
+    'const real = String.prototype.localeCompare;\n' +
+      "String.prototype.localeCompare = function (...a) { if (String(this).startsWith('supabase/')) throw new Error('boom'); return real.apply(this, a); };\n",
+  );
+  const tmp = mkdtempSync(join(tmpdir(), 'ld-demo-tmp-'));
+  const cli = fileURLToPath(new URL('../src/cli.js', import.meta.url));
+  const { pathToFileURL } = await import('node:url');
+  const res = spawnSync(process.execPath, ['--import', pathToFileURL(hook).href, cli, '--demo', '--json'], {
+    encoding: 'utf8',
+    env: { ...process.env, TMPDIR: tmp, TMP: tmp, TEMP: tmp },
+  });
+  assert.equal(res.status, 2, `expected a crash exit, got ${res.status}: ${res.stderr}`);
+  assert.match(res.stderr, /boom/);
+  assert.deepEqual(readdirSync(tmp).filter((n) => n.startsWith('launch-doctor-demo-')), []);
+});

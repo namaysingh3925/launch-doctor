@@ -104,8 +104,13 @@ async function main(): Promise<void> {
   const root = resolve(args.path ?? '.');
   if (!existsSync(root) || !statSync(root).isDirectory()) fail(`Folder not found: ${root}`);
 
-  const report = await runDoctor(root, { offline: args.offline, domain: args.domain });
-  if (args.demo) rmSync(root, { recursive: true, force: true });
+  let report;
+  try {
+    report = await runDoctor(root, { offline: args.offline, domain: args.domain });
+  } finally {
+    // The demo project lives in a temp folder; always clean it up, even if the scan throws.
+    if (args.demo) rmSync(root, { recursive: true, force: true });
+  }
 
   if (report.filesScanned === 0) {
     fail(`No project files found in ${root}. Run this inside your app's folder.`);
