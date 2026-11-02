@@ -550,3 +550,9 @@ test('missing root SPF is a checklist item for SES, Postmark and SendGrid, a war
     assert.equal(out.manual.some((m) => m.id === 'email-spf-return-path'), !expectWarning, provider);
   }
 });
+
+test('a DKIM record with only the public key (p=...) is recognised', async () => {
+  const { checkEmailDns } = await import('../src/checks/email.js');
+  const dns = await checkEmailDns('myapp.com', fakeDns({ 's1._domainkey.myapp.com': ['p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC'] }));
+  assert.equal(dns.dkim, true);
+});

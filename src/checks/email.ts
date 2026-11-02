@@ -90,7 +90,7 @@ export async function checkEmailDns(domain: string, resolver: DnsLike = new Reso
     notFound: false,
     spf: has(root, /^v=spf1/i) || has(sendSub, /^v=spf1/i),
     dmarc: has(dmarc, /^v=DMARC1/i),
-    dkim: dkim.some((r) => has(r, /v=DKIM1|k=rsa|p=/i)),
+    dkim: dkim.some((r) => has(r, /v=DKIM1|k=rsa|\bp=/i)),
   };
 }
 
