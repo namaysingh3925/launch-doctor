@@ -159,7 +159,6 @@ export function applyEmailDns(out: CheckOutput, domain: string, dns: EmailDnsRes
 export const emailCheck: Check = {
   id: 'email',
   name: 'Email delivery',
-  icon: '📧',
   weight: 1,
   ids: [
     'email-test-sender', 'email-personal-gmail', 'email-domain-not-found', 'email-no-spf', 'email-spf-return-path',

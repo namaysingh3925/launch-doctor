@@ -67,7 +67,7 @@ function cat(id: string, weight: number, findings: Finding['severity'][]): Categ
   const fs: Finding[] = findings.map((severity, i) => ({ id: `${id}-${i}`, severity, title: '', why: '', fixPrompt: '' }));
   const out = { applicable: true, findings: fs, passed: [], manual: [] };
   const score = scoreCategory(out);
-  return { ...out, id, name: id, icon: '', weight, score, grade: toGrade(score) };
+  return { ...out, id, name: id, weight, score, grade: toGrade(score) };
 }
 
 test('grading: A only when clean, any critical is an F', () => {

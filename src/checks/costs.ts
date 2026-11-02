@@ -75,7 +75,6 @@ export function middlewareBlocksApi(f: SourceFile): boolean {
 export const costsCheck: Check = {
   id: 'costs',
   name: 'AI & API costs',
-  icon: '💸',
   weight: 2,
   ids: ['ai-in-browser', 'ai-endpoint-no-auth', 'no-rate-limit', 'spending-limits', 'twilio-geo'],
   run(ctx) {

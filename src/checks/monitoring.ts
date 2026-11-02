@@ -14,7 +14,6 @@ const TRACKERS: [string, string][] = [
 export const monitoringCheck: Check = {
   id: 'monitoring',
   name: 'Errors & monitoring',
-  icon: '🚨',
   weight: 1,
   ids: ['no-error-tracking', 'no-error-boundary', 'uptime-monitor', 'know-your-logs'],
   run(ctx) {

@@ -17,7 +17,6 @@ function hasPage(ctx: ProjectContext, words: string[]): boolean {
 export const legalCheck: Check = {
   id: 'legal',
   name: 'Legal & trust',
-  icon: '📜',
   weight: 1,
   ids: ['no-privacy-policy', 'no-terms', 'no-refund-policy', 'no-contact', 'no-account-deletion', 'cookie-consent'],
   run(ctx) {

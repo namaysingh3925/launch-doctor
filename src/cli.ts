@@ -8,7 +8,7 @@ import { bold, dim, renderReport } from './report.js';
 import { version } from './version.js';
 
 const HELP = `
-  ${bold('🩺 Launch Doctor')} — a pre-launch checkup for vibe-coded apps
+  ${bold('Launch Doctor')} - a pre-launch checkup for vibe-coded apps
 
   ${bold('Usage')}
     npx launch-doctor [folder] [options]

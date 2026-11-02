@@ -89,7 +89,6 @@ interface PolicyInfo {
 export const databaseCheck: Check = {
   id: 'database',
   name: 'Database & backups',
-  icon: '💾',
   weight: 3,
   ids: [
     'supabase-rls-missing', 'supabase-open-policy', 'supabase-signed-in-write-policy', 'supabase-public-read',

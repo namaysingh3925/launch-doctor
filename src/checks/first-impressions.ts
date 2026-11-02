@@ -17,7 +17,6 @@ const htmlOrLayout = (f: SourceFile) =>
 export const firstImpressionsCheck: Check = {
   id: 'first-impressions',
   name: 'First impressions',
-  icon: '✨',
   weight: 1,
   ids: [
     'default-title', 'lovable-default-meta', 'default-favicon', 'no-description', 'no-social-preview', 'hardcoded-localhost',

@@ -40,7 +40,6 @@ export interface CheckOutput {
 export interface Check {
   id: string;
   name: string;
-  icon: string;
   /** How much this category counts towards the overall grade. */
   weight: number;
   /** Every finding and checklist id this check can produce (used to spot typos in .launchdoctorignore). */
@@ -51,7 +50,6 @@ export interface Check {
 export interface CategoryResult extends CheckOutput {
   id: string;
   name: string;
-  icon: string;
   weight: number;
   score: number | null;
   grade: Grade | null;

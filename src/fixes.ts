@@ -58,16 +58,17 @@ export function renderFixes(report: Report): string {
 
   let n = 1;
   if (critical.length) {
-    out.push('## 🔴 Must fix before launch', '');
+    out.push('## Must fix before launch', '');
     for (const f of critical) out.push(section(f, n++));
   }
   if (warnings.length) {
-    out.push('## 🟡 Should fix', '');
+    out.push('## Should fix', '');
     for (const f of warnings) out.push(section(f, n++));
   }
   if (manual.length) {
-    out.push("## ☐ Check yourself (things we can't see from your code)", '');
-    for (const m of manual) out.push(`- [ ] **${m.title}** — ${m.how}`);
+    out.push('## Check yourself', '');
+    out.push("Things Launch Doctor can't see from your code:", '');
+    for (const m of manual) out.push(`- [ ] **${m.title}** - ${m.how}`);
     out.push('');
   }
 

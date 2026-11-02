@@ -135,7 +135,6 @@ function capitalize(s: string): string {
 export const secretsCheck: Check = {
   id: 'secrets',
   name: 'Secrets & keys',
-  icon: '🔑',
   weight: 3,
   ids: [
     ...KEY_PATTERNS.map((p) => p.id),

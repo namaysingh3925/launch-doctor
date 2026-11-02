@@ -19,7 +19,7 @@ function gradeColor(grade: Grade): (s: string) => string {
 }
 
 function badge(grade: Grade | null): string {
-  if (!grade) return dim('–');
+  if (!grade) return dim('-');
   return bold(gradeColor(grade)(grade));
 }
 
@@ -51,11 +51,13 @@ function categorySummary(c: CategoryResult): string {
   return parts.join(dim(' · '));
 }
 
+const DETAIL_INDENT = '      ';
+
 function findingBlock(f: Finding, width: number): string[] {
-  const icon = f.severity === 'critical' ? '🔴' : '🟡';
-  const lines = [`  ${icon} ${bold(f.title)}`];
-  if (f.location) lines.push(`     ${cyan(shortWhere(f.location))}`);
-  lines.push(...wrap(f.why, width - 5, '     '));
+  const label = f.severity === 'critical' ? bold(red('[CRITICAL]')) : bold(yellow('[WARN]'));
+  const lines = [`  ${label} ${bold(f.title)}`];
+  if (f.location) lines.push(`${DETAIL_INDENT}${cyan(shortWhere(f.location))}`);
+  lines.push(...wrap(f.why, width - DETAIL_INDENT.length, DETAIL_INDENT));
   lines.push('');
   return lines;
 }
@@ -64,7 +66,7 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
   const width = Math.max(60, Math.min(100, process.stdout.columns || 80));
   const lines: string[] = [''];
 
-  lines.push(`  ${bold('🩺 Launch Doctor')} ${dim(`v${report.version}`)}`);
+  lines.push(`  ${bold('Launch Doctor')} ${dim(`v${report.version}`)}`);
   const stack = report.stack.length ? ` · ${report.stack.join(', ')}` : '';
   lines.push(`  ${dim(`Checked ${report.projectName} · ${plural(report.filesScanned, 'file')}${stack}`)}`);
   if (report.truncated) lines.push(`  ${yellow('Very large project: only the first 20,000 files were checked.')}`);
@@ -74,7 +76,7 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
 
   const nameWidth = Math.max(...report.categories.map((c) => c.name.length)) + 2;
   for (const c of report.categories) {
-    lines.push(`  ${badge(c.grade)}  ${c.icon} ${c.name.padEnd(nameWidth)}${categorySummary(c)}`);
+    lines.push(`  ${badge(c.grade)}  ${c.name.padEnd(nameWidth)}${categorySummary(c)}`);
   }
   lines.push('');
 
@@ -94,16 +96,16 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
   const passed = report.categories.flatMap((c) => c.passed);
   if (passed.length) {
     lines.push(`  ${bold(green(`LOOKS GOOD (${passed.length})`))}`);
-    for (const p of passed) lines.push(`  ${green('✔')} ${p}`);
+    for (const p of passed) lines.push(`  ${green('[PASS]')} ${p}`);
     lines.push('');
   }
 
   const manual = report.categories.flatMap((c) => c.manual);
   if (manual.length) {
-    lines.push(`  ${bold(`CHECK YOURSELF (${manual.length})`)}  ${dim("— things we can't see from your code")}`);
+    lines.push(`  ${bold(`CHECK YOURSELF (${manual.length})`)}  ${dim("- things we can't see from your code")}`);
     for (const m of manual) {
-      lines.push(`  ☐ ${m.title}`);
-      lines.push(...wrap(m.how, width - 4, '    ').map(dim));
+      lines.push(`  [ ] ${m.title}`);
+      lines.push(...wrap(m.how, width - DETAIL_INDENT.length, DETAIL_INDENT).map(dim));
     }
     lines.push('');
   }
@@ -119,8 +121,8 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
   }
 
   if (opts.fixFile) {
-    lines.push(`  📋 ${bold('Copy-paste fix prompts saved to')} ${cyan(opts.fixFile)}`);
-    lines.push(`     ${dim('Paste them one at a time into Claude Code, Cursor, Lovable or Bolt, then run launch-doctor again.')}`);
+    lines.push(`  ${bold('Fix prompts saved to')} ${cyan(opts.fixFile)}`);
+    lines.push(`  ${dim('Paste them one at a time into Claude Code, Cursor, Lovable or Bolt, then run launch-doctor again.')}`);
     lines.push('');
   }
 

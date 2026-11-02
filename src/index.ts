@@ -54,7 +54,6 @@ export async function runDoctor(root: string, options: Options = {}): Promise<Re
       ...out,
       id: check.id,
       name: check.name,
-      icon: check.icon,
       weight: check.weight,
       score,
       grade: score === null ? null : toGrade(score),

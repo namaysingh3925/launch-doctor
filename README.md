@@ -1,4 +1,4 @@
-# 🩺 Launch Doctor
+# Launch Doctor
 
 **A pre-launch checkup for vibe-coded apps.**
 One command grades your project A–F on the things that break *after* launch: leaked keys, open databases, fake-able payments, emails landing in spam, surprise AI bills, missing legal pages, and the "Vite + React" title still in your browser tab.
@@ -36,49 +36,49 @@ npx launch-doctor --demo
 ```
 
 ```
-  🩺 Launch Doctor v0.1.0
+  Launch Doctor v0.1.0
   Checked my-weekend-saas · 12 files · Vite, React, Supabase, Stripe, OpenAI
 
   Overall grade  F   Not ready to launch: fix 6 critical issues first
 
-  F  🔑 Secrets & keys       2 critical · 1 to fix · 1 to check
-  F  💾 Database & backups   2 critical · 1 to check
-  F  💳 Payments             1 critical · 2 to check
-  F  💸 AI & API costs       1 critical · 1 to fix · 1 to check
-  B  📧 Email delivery       1 to fix · 3 to check
-  C  🚨 Errors & monitoring  2 to fix · 2 to check
-  D  📜 Legal & trust        5 to fix
-  D  ✨ First impressions    5 to fix · 3 to check
+  F  Secrets & keys       2 critical · 1 to fix · 1 to check
+  F  Database & backups   2 critical · 1 to check
+  F  Payments             1 critical · 2 to check
+  F  AI & API costs       1 critical · 1 to fix · 1 to check
+  B  Email delivery       1 to fix · 3 to check
+  C  Errors & monitoring  2 to fix · 2 to check
+  D  Legal & trust        5 to fix
+  D  First impressions    5 to fix · 3 to check
 
   MUST FIX BEFORE LAUNCH (6)
 
-  🔴 Stripe live secret key is written directly in your code
-     src/lib/stripe.ts:1
-     This file is sent to every visitor's browser, so anyone can copy the key
-     (sk_live_…exe9) and use your account.
+  [CRITICAL] Stripe live secret key is written directly in your code
+      src/lib/stripe.ts:1
+      This file is sent to every visitor's browser, so anyone can copy the key
+      (sk_live_…exe9) and use your account.
 
-  🔴 1 Supabase table without Row Level Security: profiles
-     supabase/migrations/20260101000000_init.sql:1
-     Your Supabase public (anon) key is inside your website, which is normal.
-     But without Row Level Security, anyone holding that key can read, change or
-     delete every row in these tables.
+  [CRITICAL] Secret exposed through the public variable VITE_OPENAI_API_KEY
+      .env:3
+      Anything starting with VITE_ gets copied into your website's JavaScript,
+      so every visitor can read it. That prefix is only for values that are safe
+      to be public.
   ...
 
-  📋 Copy-paste fix prompts saved to LAUNCH_FIXES.md
+  Fix prompts saved to LAUNCH_FIXES.md
 ```
 
 ## What it checks
 
-| | Category | Examples of what it catches |
-|---|---|---|
-| 🔑 | **Secrets & keys** | Stripe / OpenAI / Anthropic / AWS / GitHub keys in code · Supabase `service_role` key in the frontend · secrets in `NEXT_PUBLIC_` / `VITE_` variables · `.env` not in `.gitignore` or already committed · database passwords in connection strings |
-| 💾 | **Database & backups** | Supabase tables without Row Level Security · policies that let anyone write (`using (true)`) · Firebase "test mode" rules · SQLite on Vercel/Netlify · `prisma db push` / `--accept-data-loss` instead of migrations |
-| 💳 | **Payments** | Stripe webhooks that don't verify the signature · webhooks that parse JSON before verifying (so every real webhook fails) · no webhook at all · Razorpay payments never verified on the server |
-| 💸 | **AI & API costs** | OpenAI/Anthropic/Gemini called from the browser · `dangerouslyAllowBrowser: true` · AI endpoints with no login check · no rate limiting |
-| 📧 | **Email delivery** | Sending from `onboarding@resend.dev` · sending through personal Gmail · missing SPF / DMARC / DKIM on your domain (live DNS check) · Supabase's built-in test mailer |
-| 🚨 | **Errors & monitoring** | No error tracking (Sentry, PostHog, …) · no error boundary / `error.tsx`, so crashes show a blank white page |
-| 📜 | **Legal & trust** | No privacy policy, terms, refund policy or contact page · no way for users to delete their account · cookie analytics without consent |
-| ✨ | **First impressions** | Default "Vite + React" / "Create Next App" titles · Vite favicon · Lovable default meta tags · no description or social preview image · hard-coded `localhost` URLs |
+| Category | Examples of what it catches |
+|---|---|
+| **Secrets & keys** | Stripe / OpenAI / Anthropic / AWS / GitHub keys in code · Supabase `service_role` key in the frontend · secrets in `NEXT_PUBLIC_` / `VITE_` variables · `.env` not in `.gitignore` or already committed · database passwords in connection strings |
+| **Database & backups** | Supabase tables without Row Level Security · policies that let anyone write (`using (true)`) · Firebase "test mode" rules · SQLite on Vercel/Netlify · `prisma db push` / `--accept-data-loss` instead of migrations |
+| **Payments** | Stripe webhooks that don't verify the signature · webhooks that parse JSON before verifying (so every real webhook fails) · no webhook at all · Razorpay payments never verified on the server |
+| **AI & API costs** | OpenAI/Anthropic/Gemini called from the browser · `dangerouslyAllowBrowser: true` · AI endpoints with no login check · no rate limiting |
+| **Email delivery** | Sending from `onboarding@resend.dev` · sending through personal Gmail · missing SPF / DMARC / DKIM on your domain (live DNS check) · Supabase's built-in test mailer |
+| **Errors & monitoring** | No error tracking (Sentry, PostHog, …) · no error boundary / `error.tsx`, so crashes show a blank white page |
+| **Legal & trust** | No privacy policy, terms, refund policy or contact page · no way for users to delete their account · cookie analytics without consent |
+| **First impressions** | Default "Vite + React" / "Create Next App" titles · Vite favicon · Lovable default meta tags · no description or social preview image · hard-coded `localhost` URLs |
 
 Things that can't be seen from code — backups, spending limits, a real test purchase, uptime monitoring — go on a **"Check yourself"** checklist instead of being guessed at.
 

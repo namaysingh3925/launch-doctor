@@ -44,7 +44,7 @@ export function overall(categories: CategoryResult[]) {
       ? `Not ready to launch: fix ${plural(critical, 'critical issue')} first`
       : warning > 0
         ? `Almost ready: ${plural(warning, 'thing')} to improve`
-        : 'Looks ready to launch 🚀';
+        : 'Looks ready to launch';
 
   return { score, grade: toGrade(score), verdict, counts: { critical, warning, manual } };
 }

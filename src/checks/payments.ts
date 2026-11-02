@@ -69,7 +69,6 @@ function parsedBodyFinding(loc: Location, globalParser = false): Finding {
 export const paymentsCheck: Check = {
   id: 'payments',
   name: 'Payments',
-  icon: '💳',
   weight: 3,
   ids: [
     'stripe-webhook-unverified', 'stripe-webhook-parsed-body', 'stripe-no-webhook', 'razorpay-unverified',
