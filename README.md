@@ -132,6 +132,8 @@ jobs:
       - run: npx launch-doctor --ci
 ```
 
+On GitHub Actions, Launch Doctor also adds a summary (grade, category table, and every critical and warning with its file and line) to the job's summary page, using the `GITHUB_STEP_SUMMARY` file that Actions provides. No setup is needed.
+
 By default `--ci` fails only on critical issues. Use `--fail-on warning` to fail on warnings too.
 `--ci` and `--json` don't write `LAUNCH_FIXES.md` unless you pass `--out`.
 

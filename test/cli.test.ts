@@ -125,3 +125,29 @@ test('--only and --skip choose categories; skipped ones do not count toward the 
   assert.match(bad.stderr, /unknown category "nope"/);
   assert.match(run(['--help']).stdout, /--only <ids>[\s\S]*first-impressions/);
 });
+
+test('writes a Markdown summary when GITHUB_STEP_SUMMARY is set', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const summary = join(mkdtempSync(join(tmpdir(), 'ld-summary-')), 'summary.md');
+  writeFileSync(summary, '# Earlier step\n');
+  const res = spawnSync(process.execPath, [CLI, leaky(), '--offline', '--no-file'], {
+    encoding: 'utf8',
+    env: { ...process.env, NO_COLOR: '1', GITHUB_STEP_SUMMARY: summary },
+  });
+  assert.equal(res.status, 0, res.stderr);
+  const md = readFileSync(summary, 'utf8');
+  assert.match(md, /^# Earlier step/, 'appends instead of overwriting');
+  assert.match(md, /## Launch Doctor: grade F/);
+  assert.match(md, /\| Category \| Grade \| Critical \| Warnings \| To check \|/);
+  assert.match(md, /\| Secrets & keys \| F \| 1 \|/);
+  assert.match(md, /### Critical \(1\)/);
+  assert.match(md, /Stripe live secret key is written directly in your code \(`src\/pay\.ts:1`\)/);
+  assert.match(md, /### Warnings/);
+});
+
+test('no summary file is written when GITHUB_STEP_SUMMARY is not set', () => {
+  const res = run([leaky(), '--offline', '--no-file']);
+  assert.equal(res.status, 0);
+  assert.equal(process.env.GITHUB_STEP_SUMMARY, undefined);
+});

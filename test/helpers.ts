@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Report } from '../src/types.js';
 
+// Tests spawn the CLI with process.env. On GitHub Actions that would write test runs into the real job summary.
+delete process.env.GITHUB_STEP_SUMMARY;
+
 /** Create a throwaway project folder from a { path: content } map. */
 export function makeProject(files: Record<string, string>): string {
   const dir = mkdtempSync(join(tmpdir(), 'launch-doctor-'));

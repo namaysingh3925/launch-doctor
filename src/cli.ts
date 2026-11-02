@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { createDemoProject } from './demo.js';
 import { renderFixes } from './fixes.js';
 import { failingFindings } from './grade.js';
 import { CATEGORY_IDS, runDoctor } from './index.js';
 import { bold, dim, renderReport } from './report.js';
+import { renderStepSummary } from './summary.js';
 import type { Severity } from './types.js';
 import { version } from './version.js';
 
@@ -35,6 +36,9 @@ const HELP = `
   ${bold('Ignoring findings')}
     .launchdoctorignore            one finding id or path per line
     // launch-doctor-ignore <id>   comment on (or above) a line to silence one finding there
+
+  ${bold('GitHub Actions')}
+    When GITHUB_STEP_SUMMARY is set, a Markdown summary is added to the job summary page.
 
   ${bold('Examples')}
     npx launch-doctor
@@ -166,6 +170,16 @@ async function main(): Promise<void> {
       fixFile = rel && !rel.startsWith('..') ? rel : target;
     } catch (err) {
       process.stderr.write(`${dim(`Couldn't write ${target}: ${(err as Error).message}`)}\n`);
+    }
+  }
+
+  // On GitHub Actions, add a summary to the job's summary page.
+  const stepSummary = process.env.GITHUB_STEP_SUMMARY;
+  if (stepSummary) {
+    try {
+      appendFileSync(stepSummary, `${renderStepSummary(report)}\n`);
+    } catch (err) {
+      process.stderr.write(`${dim(`Couldn't write the GitHub step summary: ${(err as Error).message}`)}\n`);
     }
   }
 
