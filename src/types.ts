@@ -97,4 +97,6 @@ export interface Options {
   skip?: string[];
   /** Load .launchdoctor-baseline.json if present (default true). */
   baseline?: boolean;
+  /** Also scan git history for removed keys (opt-in). depth = how many commits. */
+  history?: { depth: number };
 }

@@ -4,6 +4,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { applyBaseline, BASELINE_FILE, loadBaseline, writeBaseline } from './baseline.js';
 import { createDemoProject } from './demo.js';
 import { renderFixes } from './fixes.js';
+import { DEFAULT_HISTORY_DEPTH } from './history.js';
 import { runInit } from './init.js';
 import { failingFindings } from './grade.js';
 import { CATEGORY_IDS, runDoctor } from './index.js';
@@ -31,6 +32,8 @@ const HELP = `
     --fail-on <level>   With --ci, the lowest severity that fails: critical (default) or warning
     --only <ids>        Run only these categories (comma-separated)
     --skip <ids>        Skip these categories (comma-separated)
+    --history           Also look for keys still in git history (reads the last 500 commits)
+    --history-depth <n> How many commits --history reads (default 500)
     --update-baseline   Save today's findings to .launchdoctor-baseline.json as accepted
     --no-baseline       Ignore .launchdoctor-baseline.json and show every finding
     --demo              Try it on a sample app full of mistakes
@@ -67,6 +70,8 @@ interface Args {
   sarif?: string;
   updateBaseline: boolean;
   baseline: boolean;
+  history: boolean;
+  historyDepth: number;
   demo: boolean;
   help: boolean;
   version: boolean;
@@ -75,7 +80,7 @@ interface Args {
 function parseArgs(argv: string[]): Args {
   const args: Args = {
     writeFile: true, json: false, offline: false, ci: false, failOn: 'critical', updateBaseline: false, baseline: true,
-    demo: false, help: false, version: false,
+    history: false, historyDepth: DEFAULT_HISTORY_DEPTH, demo: false, help: false, version: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
@@ -93,6 +98,9 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--no-file') args.writeFile = false;
     else if (a === '--update-baseline') args.updateBaseline = true;
     else if (a === '--no-baseline') args.baseline = false;
+    else if (a === '--history') args.history = true;
+    else if (a === '--history-depth') args.historyDepth = depthArg(value());
+    else if (a.startsWith('--history-depth=')) args.historyDepth = depthArg(a.slice(16));
     else if (a === '--domain') args.domain = cleanDomain(value());
     else if (a.startsWith('--domain=')) args.domain = cleanDomain(a.slice(9));
     else if (a === '--fail-on') args.failOn = severityArg(value());
@@ -121,6 +129,12 @@ function categoriesArg(flag: string, input: string): string[] {
     fail(`${flag}: unknown category "${unknown.join('", "') || input}". Use: ${CATEGORY_IDS().join(', ')}`);
   }
   return ids;
+}
+
+function depthArg(input: string): number {
+  const n = Number(input);
+  if (!Number.isInteger(n) || n < 1) fail(`--history-depth must be a whole number of commits (1 or more), not "${input}"`);
+  return n;
 }
 
 function severityArg(input: string): Severity {
@@ -183,6 +197,7 @@ async function main(): Promise<void> {
       skip: args.skip,
       // When updating, start from scratch so every current finding is saved.
       baseline: args.baseline && !args.updateBaseline,
+      history: args.history ? { depth: args.historyDepth } : undefined,
     });
   } finally {
     // The demo project lives in a temp folder; always clean it up, even if the scan throws.

@@ -87,6 +87,29 @@ const KEY_PATTERNS: KeyPattern[] = [
   },
 ];
 
+export interface KeyMatch {
+  pattern: KeyPattern;
+  value: string;
+}
+
+/** Every real-looking API key in a piece of text (placeholders like "sk_live_xxxx" are skipped). */
+export function matchKeys(text: string): KeyMatch[] {
+  const out: KeyMatch[] = [];
+  for (const p of KEY_PATTERNS) {
+    const re = new RegExp(p.re.source, 'g');
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      const value = m[0];
+      if (p.id !== 'private-key' && looksLikePlaceholder(value)) continue;
+      if (p.mustLookRandom && !looksRandom(value, p.mustLookRandom)) continue;
+      out.push({ pattern: p, value });
+    }
+  }
+  return out;
+}
+
+export type { KeyPattern };
+
 const DB_URL_RE = /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|rediss?):\/\/([^:\s'"`/@]+):([^@\s'"`]+)@([^\s'"`/:?,]+)/g;
 const LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|host\.docker\.internal|db|database|postgres|mysql|mongo|mongodb|redis)$/i;
 const WEAK_PLACEHOLDER_PW = /^(password|pass|postgres|root|secret|admin|pwd|user|mysql|test)$/i;
@@ -139,6 +162,7 @@ export const secretsCheck: Check = {
   ids: [
     ...KEY_PATTERNS.map((p) => p.id),
     'database-password', 'supabase-service-role-key', 'public-secret-variable', 'env-committed', 'env-not-ignored', 'separate-keys',
+    'secret-in-history',
   ],
   run(ctx) {
     const out = emptyOutput();

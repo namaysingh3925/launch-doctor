@@ -8,6 +8,8 @@ import { monitoringCheck } from './checks/monitoring.js';
 import { paymentsCheck } from './checks/payments.js';
 import { secretsCheck } from './checks/secrets.js';
 import { overall, scoreCategory, toGrade } from './grade.js';
+import { scanHistory } from './history.js';
+import { plural } from './util.js';
 import { ProjectContext } from './project.js';
 import type { CategoryResult, Check, CheckOutput, Finding, Options, Report } from './types.js';
 import { version } from './version.js';
@@ -74,6 +76,19 @@ export async function runDoctor(root: string, options: Options = {}): Promise<Re
       out = await check.run(ctx);
     } catch (err) {
       out = notRun(`This check crashed: ${(err as Error).message}`);
+    }
+    // Opt-in: keys that were removed from the code but are still in old commits.
+    if (check.id === 'secrets' && options.history && out.applicable) {
+      if (!ctx.gitRoot) {
+        out.passed.push('Git history not checked (this folder is not a git repo)');
+      } else {
+        const history = await scanHistory(ctx, options.history.depth);
+        out.findings.push(...history.findings);
+        if (!history.findings.length) {
+          out.passed.push(`No removed keys found in the last ${plural(history.commitsScanned, 'commit')} of git history`);
+        }
+        if (history.truncated) out.passed.push('Git history scan stopped early because the history is very large');
+      }
     }
     // Inline: a "launch-doctor-ignore <id>" comment on the finding's line or the line above.
     const inline = out.findings.filter((f) => isInlineIgnored(ctx, f));
