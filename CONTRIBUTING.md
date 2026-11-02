@@ -11,7 +11,7 @@ npm run doctor -- --demo  # run the CLI against the built-in sample app
 npm run doctor -- ../some-app
 ```
 
-Node 18+ is required to run the tool. The test runner needs Node 21+.
+Node 22 or newer is required (the test command uses `node --test` glob patterns, and CI runs Node 22 and 24).
 
 ## How the code is laid out
 

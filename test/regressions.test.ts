@@ -396,3 +396,11 @@ test('find() line numbers match lineAt() for every position', async () => {
   for (let i = 0; i <= content.length; i++) assert.equal(ctx.lineOf(file, i), lineAt(content, i), `index ${i}`);
   assert.deepEqual(ctx.find(/X/).map((m) => m.line), [5, 8, 9]);
 });
+
+// ---- Item 11: engines.node matches what the tests and CI need ----
+
+test('package.json requires Node 22 or newer', async () => {
+  const { readFileSync } = await import('node:fs');
+  const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  assert.equal(pkg.engines.node, '>=22');
+});
