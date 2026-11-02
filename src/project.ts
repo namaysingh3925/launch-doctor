@@ -94,7 +94,8 @@ export function packageNameOf(spec: string): string | null {
   let s = spec
     .replace(/^npm:/, '')
     .replace(/^jsr:/, '')
-    .replace(/^https?:\/\/(?:esm\.sh|cdn\.skypack\.dev|cdn\.jsdelivr\.net\/npm|unpkg\.com)\//, '');
+    .replace(/^https?:\/\/(?:esm\.sh|cdn\.skypack\.dev|cdn\.jsdelivr\.net\/npm|unpkg\.com)\//, '')
+    .replace(/[?#].*$/, '');
   if (!s || s.startsWith('.') || s.startsWith('/') || s.startsWith('node:') || /^[a-z]+:/i.test(s)) return null;
   const parts = s.split('/');
   s = s.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]!;
@@ -256,7 +257,8 @@ export class ProjectContext {
         try {
           const full = join(abs, entry.name);
           if (statSync(full).size > MAX_FILE_SIZE) continue;
-          const file = { path: relPath, content: readFileSync(full, 'utf8') };
+          // Strip the byte-order mark some Windows editors add, or JSON.parse fails.
+          const file = { path: relPath, content: readFileSync(full, 'utf8').replace(/^﻿/, '') };
           this.files.push(file);
           this.byPath.set(relPath, file);
         } catch {
@@ -389,7 +391,9 @@ export class ProjectContext {
       this.isSpa &&
       /(^|\/)src\//.test(p) &&
       !/(^|\/)(server|api|backend|functions|scripts)\//.test(p) &&
-      !/\.(server|config)\.[a-z]+$/i.test(p)
+      !/(^|\/)(server|api|backend|worker)\.[jt]s$/i.test(p) &&
+      !/\.(server|config)\.[a-z]+$/i.test(p) &&
+      !looksLikeServerCode(file.content)
     ) {
       return true;
     }
@@ -432,6 +436,14 @@ export class ProjectContext {
   }
 }
 
+/** Code that only makes sense on a server, even if it sits in a frontend folder. */
+function looksLikeServerCode(content: string): boolean {
+  return (
+    /(?:from\s*|require\s*\(\s*)["'](?:node:)?(express|fastify|hono|koa|http|https|fs|child_process|@hono\/node-server)["']/.test(content) ||
+    /\.listen\s*\(\s*(?:\d|port|process\.env)/i.test(content)
+  );
+}
+
 // ---------- git helpers ----------
 
 function git(cwd: string, args: string[]): string | null {
@@ -468,11 +480,12 @@ function gitLsFiles(root: string): Set<string> | null {
 
 function gitCheckIgnore(root: string, paths: string[]): Set<string> | null {
   try {
-    const out = execFileSync('git', ['check-ignore', '--', ...paths], {
+    // -z keeps unusual file names (spaces, accents) unquoted in the output.
+    const out = execFileSync('git', ['check-ignore', '-z', '--', ...paths], {
       cwd: root,
       stdio: ['ignore', 'pipe', 'ignore'],
     }).toString();
-    return new Set(out.split(/\r?\n/).filter(Boolean));
+    return new Set(out.split('\0').filter(Boolean));
   } catch (err) {
     const e = err as { status?: number };
     // Exit code 1 means "none of these are ignored".
@@ -511,10 +524,21 @@ export function matchesGitignore(gitignore: string, path: string): boolean {
     const negate = line.startsWith('!');
     if (negate) line = line.slice(1);
     line = line.replace(/\/+$/, '');
+    // "**/x" means "x in any folder".
+    let anyDepth = false;
+    while (line.startsWith('**/')) {
+      line = line.slice(3);
+      anyDepth = true;
+    }
     const anchored = line.startsWith('/') || line.includes('/');
     line = line.replace(/^\//, '');
+    if (!line) continue;
     const re = globToRegex(line);
-    const hit = anchored ? re.test(path) : re.test(name) || path.split('/').some((seg) => re.test(seg));
+    const segments = path.split('/');
+    let hit: boolean;
+    if (!anchored) hit = re.test(name) || segments.some((seg) => re.test(seg));
+    else if (anyDepth) hit = segments.some((_, i) => re.test(segments.slice(i).join('/')));
+    else hit = re.test(path);
     if (hit) ignored = !negate;
   }
   return ignored;

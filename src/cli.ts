@@ -59,8 +59,8 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--ci') args.ci = true;
     else if (a === '--demo') args.demo = true;
     else if (a === '--no-file') args.writeFile = false;
-    else if (a === '--domain') args.domain = value().replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase();
-    else if (a.startsWith('--domain=')) args.domain = a.slice(9).toLowerCase();
+    else if (a === '--domain') args.domain = cleanDomain(value());
+    else if (a.startsWith('--domain=')) args.domain = cleanDomain(a.slice(9));
     else if (a === '--out') args.out = value();
     else if (a.startsWith('--out=')) args.out = a.slice(6);
     else if (a.startsWith('-')) fail(`Unknown option ${a}. Run with --help to see the options.`);
@@ -68,6 +68,13 @@ function parseArgs(argv: string[]): Args {
     else fail(`Unexpected argument ${a}`);
   }
   return args;
+}
+
+/** "https://www.MyApp.com/pricing" -> "myapp.com" */
+function cleanDomain(input: string): string {
+  const domain = input.trim().replace(/^https?:\/\//i, '').replace(/[/?#].*$/, '').replace(/^www\./i, '').toLowerCase();
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain)) fail(`"${input}" doesn't look like a domain (example: myapp.com)`);
+  return domain;
 }
 
 function fail(message: string): never {

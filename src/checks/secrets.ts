@@ -10,6 +10,17 @@ interface KeyPattern {
   severity: Severity;
   envName: string;
   rotate: string;
+  /**
+   * For prefixes that also show up in normal text (like "sk-" in URL slugs):
+   * "mixed" needs upper case, lower case and a digit; "digits-letters" needs both.
+   */
+  mustLookRandom?: 'mixed' | 'digits-letters';
+}
+
+function looksRandom(value: string, kind: 'mixed' | 'digits-letters'): boolean {
+  const hasDigit = /\d/.test(value);
+  if (kind === 'digits-letters') return hasDigit && /[a-z]/i.test(value);
+  return hasDigit && /[A-Z]/.test(value) && /[a-z]/.test(value);
 }
 
 const KEY_PATTERNS: KeyPattern[] = [
@@ -26,8 +37,28 @@ const KEY_PATTERNS: KeyPattern[] = [
     severity: 'critical', envName: 'ANTHROPIC_API_KEY', rotate: 'console.anthropic.com → Settings → API keys',
   },
   {
-    id: 'openai-key', name: 'OpenAI API key', re: /\bsk-(?!ant-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,}/g,
-    severity: 'critical', envName: 'OPENAI_API_KEY', rotate: 'platform.openai.com → API keys',
+    id: 'openrouter-key', name: 'OpenRouter API key', re: /\bsk-or-v1-[A-Za-z0-9]{40,}/g,
+    severity: 'critical', envName: 'OPENROUTER_API_KEY', rotate: 'openrouter.ai → Keys', mustLookRandom: 'digits-letters',
+  },
+  {
+    id: 'openai-key', name: 'OpenAI API key', re: /\bsk-(?!ant-|or-v1-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,}/g,
+    severity: 'critical', envName: 'OPENAI_API_KEY', rotate: 'platform.openai.com → API keys', mustLookRandom: 'mixed',
+  },
+  {
+    id: 'supabase-secret-key', name: 'Supabase secret key', re: /\bsb_secret_[A-Za-z0-9_-]{20,}/g,
+    severity: 'critical', envName: 'SUPABASE_SECRET_KEY', rotate: 'Supabase → Project Settings → API Keys',
+  },
+  {
+    id: 'stripe-webhook-secret', name: 'Stripe webhook signing secret', re: /\bwhsec_[A-Za-z0-9]{24,}/g,
+    severity: 'critical', envName: 'STRIPE_WEBHOOK_SECRET', rotate: 'Stripe Dashboard → Developers → Webhooks → Roll secret',
+  },
+  {
+    id: 'groq-key', name: 'Groq API key', re: /\bgsk_[A-Za-z0-9]{40,}/g,
+    severity: 'critical', envName: 'GROQ_API_KEY', rotate: 'console.groq.com → API Keys',
+  },
+  {
+    id: 'huggingface-token', name: 'Hugging Face token', re: /\bhf_[A-Za-z0-9]{30,}/g,
+    severity: 'critical', envName: 'HF_TOKEN', rotate: 'huggingface.co → Settings → Access Tokens', mustLookRandom: 'mixed',
   },
   {
     id: 'aws-key', name: 'AWS access key', re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g,
@@ -47,7 +78,7 @@ const KEY_PATTERNS: KeyPattern[] = [
   },
   {
     id: 'resend-key', name: 'Resend API key', re: /\bre_[A-Za-z0-9]{8,}_[A-Za-z0-9]{16,}/g,
-    severity: 'critical', envName: 'RESEND_API_KEY', rotate: 'resend.com → API Keys',
+    severity: 'critical', envName: 'RESEND_API_KEY', rotate: 'resend.com → API Keys', mustLookRandom: 'mixed',
   },
   {
     id: 'private-key', name: 'private key',
@@ -115,6 +146,7 @@ export const secretsCheck: Check = {
     for (const p of KEY_PATTERNS) {
       for (const m of ctx.find(p.re, notRealEnv)) {
         if (p.id !== 'private-key' && looksLikePlaceholder(m.match[0])) continue;
+        if (p.mustLookRandom && !looksRandom(m.match[0], p.mustLookRandom)) continue;
         const key = `${p.id}|${m.file.path}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -173,7 +205,8 @@ export const secretsCheck: Check = {
 
     // 4. Secrets exposed through "public" env variable names
     const publicHits = new Map<string, Location>();
-    for (const m of ctx.find(PUBLIC_VAR_RE, (f) => isCodeFile(f) || isEnvPath(f.path))) {
+    // Big apps reference public variables thousands of times, so don't stop early.
+    for (const m of ctx.find(PUBLIC_VAR_RE, (f) => isCodeFile(f) || isEnvPath(f.path), 200_000)) {
       const full = m.match[0];
       if (!isSensitivePublicName(m.match[2]!) || publicHits.has(full)) continue;
       publicHits.set(full, at(m));

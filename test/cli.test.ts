@@ -49,6 +49,13 @@ test('--json prints valid JSON', () => {
   assert.equal(report.categories.length, 8);
 });
 
+test('--domain accepts full URLs in both forms', () => {
+  for (const flag of [['--domain', 'https://www.Example-App.com/pricing'], ['--domain=https://www.Example-App.com/pricing']]) {
+    const res = run([leaky(), '--offline', '--json', '--no-file', ...flag]);
+    assert.equal(res.status, 0, res.stderr);
+  }
+});
+
 test('--ci exits with 1 when there are critical issues', () => {
   const res = run([leaky(), '--offline', '--ci', '--no-file']);
   assert.equal(res.status, 1);
@@ -79,5 +86,6 @@ test('helpful errors for bad input', () => {
   assert.equal(unknown.status, 2);
   assert.match(unknown.stderr, /Unknown option/);
   assert.match(run(['--help']).stdout, /Usage/);
+  assert.equal(run(['--domain', 'not a domain']).status, 2);
   assert.match(run(['--version']).stdout, /^\d+\.\d+\.\d+/);
 });

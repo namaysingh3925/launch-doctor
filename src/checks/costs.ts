@@ -1,7 +1,7 @@
 import { AUTH_CHECK_RE } from '../detect.js';
 import type { SourceFile } from '../project.js';
 import type { Check } from '../types.js';
-import { uniqueBy } from '../util.js';
+import { lineTextAt, uniqueBy } from '../util.js';
 import { appCode, at, clientCode, emptyOutput, notApplicable, serverCode, where } from './common.js';
 
 const AI_PACKAGES = [
@@ -48,9 +48,13 @@ export const costsCheck: Check = {
     const server = serverCode(ctx);
 
     // 1. Paid APIs called straight from the browser
+    // "import type" is removed at build time, so it never reaches the browser.
+    const realImports = ctx
+      .find(BROWSER_FORBIDDEN_IMPORT, client)
+      .filter((m) => !/^\s*(?:import|export)\s+type\b/.test(lineTextAt(m.file.content, m.index)));
     const browserHits = uniqueBy(
       [
-        ...ctx.find(BROWSER_FORBIDDEN_IMPORT, client),
+        ...realImports,
         ...ctx.find(AI_DIRECT_URL, client),
         ...ctx.find(/dangerouslyAllowBrowser\s*:\s*true/, appCode),
       ],
@@ -60,7 +64,7 @@ export const costsCheck: Check = {
       out.findings.push({
         id: 'ai-in-browser',
         severity: 'critical',
-        title: 'A paid AI API is called straight from the browser',
+        title: `A paid ${/twilio/i.test(m.match[0]) ? 'SMS' : 'AI'} API is called straight from the browser`,
         why: 'For that to work, your secret API key has to be in the browser too, so anyone can copy it and run up your bill. Bots scan websites for exactly this.',
         location: at(m),
         fixPrompt:
@@ -86,7 +90,7 @@ export const costsCheck: Check = {
       out.findings.push({
         id: 'ai-endpoint-no-auth',
         severity: 'warning',
-        title: `AI endpoint doesn't check who is calling it (${m.file.path})`,
+        title: `Paid API endpoint doesn't check who is calling it (${m.file.path})`,
         why: 'Anyone on the internet can call this endpoint over and over, and every call is billed to you. Only signed-in users (or a paid plan) should be able to use it.',
         location: at(m),
         fixPrompt:

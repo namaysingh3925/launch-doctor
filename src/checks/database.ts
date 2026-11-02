@@ -36,9 +36,14 @@ function analyzeSupabaseSql(files: SourceFile[]) {
     const dropRe = /drop\s+table\s+(?:if\s+exists\s+)?(?:"?(\w+)"?\s*\.\s*)?"?(\w+)"?/gi;
     while ((m = dropRe.exec(sql))) created.delete(m[2]!.toLowerCase());
 
+    // Track enable/disable in order, so a later "disable" wins.
     const rlsRe =
-      /alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:"?(\w+)"?\s*\.\s*)?"?(\w+)"?\s+enable\s+row\s+level\s+security/gi;
-    while ((m = rlsRe.exec(sql))) rls.add(m[2]!.toLowerCase());
+      /alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:"?(\w+)"?\s*\.\s*)?"?(\w+)"?\s+(enable|disable)\s+row\s+level\s+security/gi;
+    while ((m = rlsRe.exec(sql))) {
+      const name = m[2]!.toLowerCase();
+      if (m[3]!.toLowerCase() === 'enable') rls.add(name);
+      else rls.delete(name);
+    }
 
     const policyRe = /create\s+policy\s+("([^"]+)"|(\w+))\s+on\s+(?:"?\w+"?\s*\.\s*)?"?(\w+)"?([\s\S]*?);/gi;
     while ((m = policyRe.exec(sql))) {
@@ -120,7 +125,11 @@ export const databaseCheck: Check = {
       let openFound = false;
       for (const f of ruleFiles) {
         const testMode = /request\.time\s*<\s*timestamp\.date\s*\(/.exec(f.content);
-        const openAll = /allow\s+(?:read\s*,\s*write|write\s*,\s*read|write|create|update|delete)[^;]*:\s*if\s+true\s*;|allow\s+read\s*,\s*write\s*;/.exec(f.content);
+        // Any rule that allows writing (write/create/update/delete) to everyone.
+        const openAll =
+          /allow\s+[\w\s,]*\b(?:write|create|update|delete)\b[\w\s,]*:\s*if\s+true\s*;|allow\s+[\w\s,]*\b(?:write|create|update|delete)\b[\w\s,]*;/.exec(
+            f.content,
+          );
         const rtdbOpen = f.path.endsWith('.json') ? /"\.write"\s*:\s*true/.exec(f.content) : null;
         const hit = testMode ?? openAll ?? rtdbOpen;
         if (!hit) continue;
