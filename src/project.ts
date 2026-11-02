@@ -480,9 +480,17 @@ function looksLikeServerCode(content: string): boolean {
 
 // ---------- git helpers ----------
 
+/**
+ * Every git call goes through here. core.fsmonitor=false stops a scanned folder's .git/config
+ * from making git run a command of its choosing (fsmonitor can be set to any program).
+ */
+export function gitArgs(args: string[]): string[] {
+  return ['-c', 'core.fsmonitor=false', ...args];
+}
+
 function git(cwd: string, args: string[]): string | null {
   try {
-    return execFileSync('git', args, {
+    return execFileSync('git', gitArgs(args), {
       cwd,
       stdio: ['ignore', 'pipe', 'ignore'],
       maxBuffer: 64 * 1024 * 1024,
@@ -515,7 +523,7 @@ function gitLsFiles(root: string): Set<string> | null {
 function gitCheckIgnore(root: string, paths: string[]): Set<string> | null {
   try {
     // -z keeps unusual file names (spaces, accents) unquoted in the output.
-    const out = execFileSync('git', ['check-ignore', '-z', '--', ...paths], {
+    const out = execFileSync('git', gitArgs(['check-ignore', '-z', '--', ...paths]), {
       cwd: root,
       stdio: ['ignore', 'pipe', 'ignore'],
     }).toString();

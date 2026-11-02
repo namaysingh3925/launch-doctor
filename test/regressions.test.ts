@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { runDoctor } from '../src/index.js';
 import { matchesGitignore, packageNameOf } from '../src/project.js';
-import { category, fakeKey, ids, makeProject } from './helpers.js';
+import { category, fakeKey, git, hasGit, ids, makeProject } from './helpers.js';
 
 const opts = { offline: true, useGit: false };
 
@@ -489,4 +489,27 @@ test('--json and --ci imply --no-file, but --out still writes', async () => {
     spawnSync(process.execPath, [cli, dir, '--offline', flag, '--out', out], { encoding: 'utf8' });
     assert.ok(existsSync(out), `${flag} --out should write the fix file`);
   }
+});
+
+// ---- Item 15: git can't be made to run a program from the scanned folder ----
+
+test('every git command disables core.fsmonitor', async () => {
+  const { gitArgs } = await import('../src/project.js');
+  assert.deepEqual(gitArgs(['ls-files', '-z']).slice(0, 2), ['-c', 'core.fsmonitor=false']);
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../../src/project.ts', import.meta.url), 'utf8');
+  const calls = src.match(/execFileSync\('git',\s*[^)]*/g) ?? [];
+  assert.ok(calls.length >= 2);
+  for (const c of calls) assert.match(c, /gitArgs\(/, `git call without gitArgs: ${c}`);
+});
+
+test('a malicious core.fsmonitor in the scanned repo is not run', { skip: !hasGit() }, async () => {
+  const { existsSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const dir = makeProject({ 'package.json': '{}', 'index.js': '', '.env': 'TOKEN=abc123real\n' });
+  git(dir, 'init', '-q');
+  git(dir, 'config', 'core.fsmonitor', `node -e "require('fs').writeFileSync('PWNED','')"`);
+  git(dir, '-c', 'core.fsmonitor=false', 'add', 'index.js');
+  await runDoctor(dir, { offline: true });
+  assert.ok(!existsSync(join(dir, 'PWNED')), 'fsmonitor command must not run');
 });
