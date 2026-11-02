@@ -7,16 +7,24 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D22-339933)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Launch Doctor scans your project for the problems that hurt apps after launch: leaked API keys, databases anyone can read, payments that can be faked, emails that land in spam, AI endpoints that can run up your bill, missing legal pages and leftover template defaults. It is built for people who ship with AI coding tools (Claude Code, Cursor, Lovable, Bolt, Windsurf) and may not read every line the AI wrote. Every finding is explained in plain English and comes with a prompt you can paste straight back into your AI tool. It has no runtime dependencies, needs no account, and your code never leaves your machine.
+Launch Doctor scans your project for the problems that hurt apps after launch: leaked API keys, databases anyone can read, payments that can be faked, emails that land in spam, AI endpoints that can run up your bill, missing legal pages, and leftover template defaults. It is built for developers who ship with AI coding tools (Claude Code, Cursor, Lovable, Bolt, Windsurf) and may not read every line of generated code. Every finding is explained in plain English and includes a prompt you can paste straight back into your AI assistant. It has no runtime dependencies, requires no account, and your code never leaves your machine.
 
 ## Quick start
 
 ```bash
-# check the project in the current folder
 npx launch-doctor
+```
 
-# no project handy? scan a built-in sample app full of mistakes
+Scan the built-in sample app full of common mistakes:
+
+```bash
 npx launch-doctor --demo
+```
+
+Initialize configuration and GitHub Actions files:
+
+```bash
+npx launch-doctor init
 ```
 
 Requires Node.js 22 or newer.
@@ -55,45 +63,122 @@ Requires Node.js 22 or newer.
   Fix prompts saved to LAUNCH_FIXES.md
 ```
 
+## Project workflow
+
+Launch Doctor operates across two integrated workflows: an automated internal analysis pipeline that inspects your repository, and a developer-in-the-loop remediation lifecycle designed to pair with AI coding assistants.
+
+### 1. Internal analysis pipeline
+
+The following diagram outlines the multi-stage static analysis pipeline executed on every scan:
+
+```mermaid
+flowchart TD
+    Start["User / CI triggers: launch-doctor"] --> ParseArgs["1. Argument & Option Parsing"]
+    ParseArgs --> LoadContext["2. Project Ingestion & File Discovery"]
+    LoadContext --> DetectStack["3. Technology Stack & Environment Detection"]
+    DetectStack --> ChecksSuite["4. Multi-Category Check Execution"]
+    
+    subgraph ChecksSuite["4. Evaluation across 8 Check Modules"]
+        direction TB
+        C1["Secrets & Keys Scan"]
+        C2["Database Security & RLS"]
+        C3["Payment Webhooks & Verification"]
+        C4["AI Endpoints & Cost Controls"]
+        C5["Email DNS & Configuration"]
+        C6["Error Boundaries & Monitoring"]
+        C7["Legal & Compliance Pages"]
+        C8["First Impressions & Defaults"]
+        C_Hist["Optional: Git History Commit Walk"]
+    end
+    
+    ChecksSuite --> FilterIgnore["5. Suppression & Baseline Filtering"]
+    FilterIgnore --> ScoringEngine["6. Scoring & Grading Engine"]
+    ScoringEngine --> OutputDispatch["7. Output & Artifact Dispatch"]
+    
+    subgraph OutputDispatch["7. Multi-Target Outputs"]
+        direction TB
+        Out1["Terminal Dashboard Output"]
+        Out2["LAUNCH_FIXES.md Prompt Catalog"]
+        Out3["JSON / SARIF 2.1.0 Reports"]
+        Out4["GitHub Actions Step Summary"]
+    end
+    
+    OutputDispatch --> ExitEval["8. Exit Code Evaluation (0, 1, or 2)"]
+```
+
+#### Pipeline stages in detail
+
+1. **Argument parsing and validation (`src/cli.ts`):**
+   Evaluates CLI flags, path arguments, targeted categories (`--only`, `--skip`), severity thresholds (`--fail-on`), output destinations (`--out`, `--sarif`), and runtime modifiers (`--ci`, `--offline`, `--history`, `--demo`).
+2. **Project ingestion and tree traversal (`src/project.ts`):**
+   Walks the project root, automatically skipping `node_modules`, build artifacts (`dist`, `build`, `.next`), binary formats, and hidden files. Ingests package manifests (`package.json`, `requirements.txt`, `pyproject.toml`), git status, and `.launchdoctorignore` patterns.
+3. **Stack and environment detection (`src/detect.ts`, `src/comments.ts`):**
+   Identifies frameworks (Next.js, Vite, React, Vue, Flask, Django), database configurations (Supabase, Firebase, Prisma), payment gateways (Stripe, Razorpay), error trackers (Sentry, PostHog), and email services. Prepares a comment-stripped view of source files so commented-out code is not mistaken for active protection.
+4. **Multi-category check execution (`src/checks/`):**
+   Runs audits across all 8 categories. If `--history` is enabled, an incremental git commit walker inspects the last `n` commits (default 500) for secrets that were removed from HEAD but remain exposed in commit history.
+5. **Suppression and baseline matching (`src/baseline.ts`):**
+   Applies inline `launch-doctor-ignore <id>` comments and `.launchdoctorignore` path or id rules. If `.launchdoctor-baseline.json` is present and baseline mode is active, matches existing findings by ID, relative file path, and line content fingerprint.
+6. **Scoring and grading engine (`src/grade.ts`):**
+   Calculates category and overall scores from weighted deductions. Strict scoring ceilings ensure that any critical finding caps both the category score and the overall score at 39 (grade F).
+7. **Multi-target reporting and artifact generation (`src/report.ts`, `src/fixes.ts`, `src/sarif.ts`, `src/summary.ts`):**
+   Renders the CLI terminal dashboard, generates `LAUNCH_FIXES.md` with copy-paste prompts for AI models, outputs structured JSON or SARIF 2.1.0 files when requested, and populates GitHub Actions job summaries via `GITHUB_STEP_SUMMARY`.
+8. **Process exit resolution (`src/cli.ts`):**
+   Returns exit code 0 for clean runs (or CI runs without findings at or above `--fail-on`), code 1 for CI gate failures, and code 2 for invalid arguments or unexpected runtime errors.
+
+---
+
+### 2. Developer and AI remediation lifecycle
+
+Launch Doctor is built to fit directly into your daily development cycle, especially when pairing with AI assistants:
+
+```mermaid
+flowchart LR
+    Dev["1. Local Development (AI / Human)"] --> Scan["2. Run npx launch-doctor"]
+    Scan --> Check{"Grade & Findings?"}
+    Check -- "Issues Found (Grade < A)" --> ReadFixes["3. Open LAUNCH_FIXES.md"]
+    ReadFixes --> PastePrompt["4. Paste Prompts to AI Tool"]
+    PastePrompt --> ReScan["5. Re-run Scan to Verify"]
+    ReScan --> Check
+    Check -- "Clean (Grade A or Baseline)" --> Commit["6. Commit & Push Code"]
+    Commit --> CI["7. CI/CD PR Gate (--ci)"]
+    CI --> Deploy["8. Safe Production Launch"]
+```
+
+1. **Pre-flight scan:** Before shipping changes or merging a branch, run `npx launch-doctor` in your workspace.
+2. **Review findings:** Check your letter grade (A-F), category breakdown, and critical blockers in the terminal.
+3. **Copy prompts to AI tools:** Open `LAUNCH_FIXES.md`. Copy the specific problem prompt or the single batch prompt and paste it into Claude Code, Cursor, Windsurf, Lovable, or Bolt.
+4. **Verify remediation:** Re-run `npx launch-doctor` to verify the fixes and watch your grade increase.
+5. **Establish baseline for legacy debt:** If you are adopting Launch Doctor on an existing project, run `npx launch-doctor --update-baseline` so CI only reports new issues.
+6. **Automate CI gating:** Add `npx launch-doctor --ci` to your pull request workflow to catch regressions before they merge.
+
 ## What it checks
 
 | Category | What it catches | Severity range |
 |---|---|---|
-| Secrets & keys (`secrets`) | Stripe, OpenAI, Anthropic, OpenRouter, Groq, Hugging Face, Supabase, AWS, GitHub, Slack, SendGrid and Resend keys in code; Supabase `service_role` keys; private keys; database URLs with passwords; secrets in `NEXT_PUBLIC_` / `VITE_` variables; `.env` files committed or not in `.gitignore`; with `--history`, keys still in git history | Warning to critical |
+| Secrets & keys (`secrets`) | Stripe, OpenAI, Anthropic, OpenRouter, Groq, Hugging Face, Supabase, AWS, GitHub, Slack, SendGrid, and Resend keys in code; Supabase `service_role` keys; private keys; database URLs with passwords; secrets in `NEXT_PUBLIC_` / `VITE_` variables; `.env` files committed or not in `.gitignore`; with `--history`, keys still in git history | Warning to critical |
 | Database & backups (`database`) | Supabase tables without Row Level Security; policies that let anyone write (`using (true)`); write policies open to any signed-in user; Firebase test-mode or open rules; SQLite on serverless hosting; `prisma db push` / `--accept-data-loss` instead of migrations | Warning to critical |
 | Payments (`payments`) | Stripe webhooks that don't verify the signature (each route checked separately); webhooks or global `express.json()` that parse the body before verifying; no webhook at all; Razorpay payments never verified on the server | Warning to critical |
 | AI & API costs (`costs`) | Paid AI or SMS APIs called from the browser; `dangerouslyAllowBrowser: true`; AI endpoints with no login check (middleware only counts if it really blocks `/api`); no real rate limiter | Warning to critical |
 | Email delivery (`email`) | Resend's test sender; personal Gmail SMTP; sender domains that don't exist; missing SPF or DMARC (live DNS check); Supabase's built-in test mailer | Warning |
-| Errors & monitoring (`monitoring`) | No error tracking (Sentry, PostHog and others); no error boundary or `error.tsx`, so crashes show a blank page | Warning |
-| Legal & trust (`legal`) | No privacy policy, terms, refund policy or contact page; no way for users to delete their account; cookie analytics without consent | Warning |
+| Errors & monitoring (`monitoring`) | No error tracking (Sentry, PostHog, and others); no error boundary or `error.tsx`, so crashes show a blank page | Warning |
+| Legal & trust (`legal`) | No privacy policy, terms, refund policy, or contact page; no way for users to delete their account; cookie analytics without consent | Warning |
 | First impressions (`first-impressions`) | "Vite + React" / "Create Next App" titles and descriptions; Vite favicon; Lovable default meta tags; no description or social preview image; hard-coded `localhost` URLs | Warning |
 
-Each category also adds **"check yourself"** items for things code can't show, such as backups, spending limits, a real test purchase and uptime monitoring. Monitoring, legal and first impressions only run on web apps (a frontend framework, server routes, or an `index.html`). Command-line tools and libraries skip them.
-
-## How it works
-
-1. **Parse arguments:** flags, the `init` subcommand and usage errors (`src/cli.ts`).
-2. **Read the project:** walk the folder (skipping `node_modules`, build output and hidden folders), read text files, `package.json` / `requirements.txt` / `pyproject.toml` dependencies, imports, git status and `.launchdoctorignore` (`src/project.ts`).
-3. **Detect the stack:** frameworks, auth, database, payments and email providers, which files run in the browser, and whether it is a web app (`src/detect.ts`, `src/project.ts`). A comment-free view of each file (`src/comments.ts`) keeps commented-out code from counting as protection.
-4. **Run the checks:** one file per category in `src/checks/`, registered in `CHECKS` in `src/index.ts`. `--history` adds the git-history scan (`src/history.ts`).
-5. **Apply ignores:** inline `launch-doctor-ignore` comments, `.launchdoctorignore` ids and paths (`src/index.ts`), then the baseline (`src/baseline.ts`).
-6. **Score:** category scores, weights and the overall grade (`src/grade.ts`).
-7. **Output:** the terminal report (`src/report.ts`), `LAUNCH_FIXES.md` (`src/fixes.ts`), `--json`, `--sarif` (`src/sarif.ts`) and the GitHub Actions job summary (`src/summary.ts`).
-8. **Exit code:** 0, 1 or 2 (`src/cli.ts`, see below).
+Each category also adds **"check yourself"** items for things code cannot show, such as automated database backups, provider spending limits, a real test purchase, and uptime monitoring. Monitoring, legal, and first impressions checks only run on web apps (a frontend framework, server routes, or an `index.html`). Command-line tools and libraries skip them automatically.
 
 ## Grading
 
 - **Category score** = 100 − 50 per critical finding − 15 per warning.
   - Any critical finding caps the category at 39, which is an F.
-  - Without a critical finding the score never drops below 40, so warnings alone can't give an F.
+  - Without a critical finding the score never drops below 40, so warnings alone cannot produce an F.
 - **Overall score** is the weighted average of the categories that ran:
-  - Weights: secrets, database and payments 3; costs 2; email, monitoring, legal and first impressions 1.
-  - Categories that don't apply, or are skipped with `--only` / `--skip`, are left out.
+  - Weights: secrets (3), database (3), payments (3), costs (2), email (1), monitoring (1), legal (1), and first impressions (1).
+  - Categories that do not apply, or are skipped with `--only` / `--skip`, are excluded.
 - **Caps on the overall score:**
-  - Any critical finding anywhere caps it at 39 (F).
-  - Any warning caps it at 89, so an A means nothing is left to fix.
-- **Letters:** A ≥ 90, B ≥ 75, C ≥ 60, D ≥ 40, F < 40.
-- "Check yourself" items never change the grade. Baseline findings still count toward the grade, but not toward the `--ci` exit code.
+  - Any critical finding anywhere caps the overall score at 39 (F).
+  - Any warning caps it at 89, so an A requires zero warnings and zero critical issues.
+- **Grade tiers:** A ≥ 90, B ≥ 75, C ≥ 60, D ≥ 40, F < 40.
+- "Check yourself" items do not alter the numerical grade. Baseline findings count toward the grade for awareness, but are ignored by the `--ci` exit code.
 
 ## CLI reference
 
@@ -130,56 +215,53 @@ Category ids for `--only` and `--skip`: `secrets`, `database`, `payments`, `cost
 
 | Code | Meaning |
 |---|---|
-| `0` | The scan finished (and with `--ci`, nothing at or above `--fail-on`) |
-| `1` | `--ci` was given and there are findings at or above `--fail-on` (baseline findings don't count) |
-| `2` | Usage error (unknown flag, bad value, folder not found) or a crash |
+| `0` | The scan finished (and with `--ci`, no findings at or above `--fail-on`) |
+| `1` | `--ci` was given and there are findings at or above `--fail-on` (baseline findings excluded) |
+| `2` | Usage error (unknown flag, invalid argument, folder not found) or a crash |
 
 ## Configuration
 
 ### `.launchdoctorignore`
 
-One entry per line, `#` for comments. `npx launch-doctor init` creates a commented starter file.
+One entry per line. Run `npx launch-doctor init` to generate a starter template.
 
 ```
-# finding ids (each fix in LAUNCH_FIXES.md shows its id)
 no-error-tracking
 no-account-deletion
-
-# folders or files to skip
 legacy/
 scripts/seed.ts
+**/*.fixture.ts
 ```
 
-A plain word is a finding id. Anything with `/`, `*` or `.` is a path pattern, and so is a bare word that matches an existing file or folder. Ids that don't match any check are reported as a warning, so typos don't silently do nothing.
+A plain word without path characters represents a finding id. Anything containing `/`, `*`, or `.`, or matching an existing file or folder on disk, is treated as a path pattern. Finding ids that do not correspond to any known check produce a warning to catch typos.
 
 ### Inline ignores
 
-To silence one finding in one place, put a `launch-doctor-ignore <id>` comment on the same line or the line above. Any comment style works (`//`, `#`, `/* */`, `<!-- -->`, SQL `--`), and you can list several ids separated by commas.
+To silence a specific finding at a single line, place a `launch-doctor-ignore <id>` directive on that line or the line directly above it. All directive styles are supported (`//`, `#`, `/* */`, `<!-- -->`, SQL `--`), and multiple ids can be separated by commas:
 
 ```ts
 // launch-doctor-ignore stripe-test-key
-const STRIPE_TEST_KEY = 'sk_test_...'; // used only by the local seed script
+const STRIPE_TEST_KEY = 'sk_test_...';
 ```
 
 ### Baseline
 
-Adding Launch Doctor to an existing project? Record what's there today, so CI only fails on new problems:
+When adding Launch Doctor to an existing codebase, record current findings so CI checks focus exclusively on new issues:
 
 ```bash
-npx launch-doctor --update-baseline   # writes .launchdoctor-baseline.json (commit it)
+npx launch-doctor --update-baseline
 ```
 
-Later runs:
+On subsequent runs:
+- Matching findings are tagged with `baseline: true` in JSON output.
+- They are summarized in terminal output as a single "N existing issues (baseline)" line.
+- They are excluded from `--ci` / `--fail-on` failure checks.
 
-- mark matching findings as `baseline: true` in `--json`;
-- show them as a single "N existing issues (baseline)" line;
-- leave them out of `--ci` / `--fail-on`.
-
-Findings are matched by id, file and the text of the matched line, so they still match when lines move. `--no-baseline` shows everything again.
+Findings are tracked by check ID, file path, and a fingerprint of the offending line, preserving baseline matches even as line numbers shift. Run with `--no-baseline` to display all suppressed findings.
 
 ## CI integration
 
-`npx launch-doctor init` creates this workflow:
+The `npx launch-doctor init` command creates this GitHub Actions workflow:
 
 ```yaml
 name: Launch Doctor
@@ -195,9 +277,9 @@ jobs:
       - run: npx launch-doctor --ci
 ```
 
-- **`--fail-on`:** by default `--ci` fails only on critical findings. Use `--fail-on warning` to fail on warnings too.
-- **Job summary:** on GitHub Actions, Launch Doctor adds a summary (grade, category table, and each critical and warning with its file and line) to the job's summary page through the `GITHUB_STEP_SUMMARY` file. No setup is needed.
-- **Code scanning:** to see findings as alerts in the repository's Security tab, write SARIF and upload it:
+- **Severity gating:** By default, `--ci` exits with code 1 only on critical findings. Add `--fail-on warning` to fail builds on warnings as well.
+- **Job summaries:** When running in GitHub Actions, Launch Doctor automatically writes a markdown summary (including overall grade, category scorecard, and itemized issues with file and line links) to the GitHub Actions job summary tab via `GITHUB_STEP_SUMMARY`.
+- **Code scanning alerts:** Export findings to SARIF 2.1.0 format to populate alerts directly in your repository Security tab:
 
 ```yaml
       - run: npx launch-doctor --sarif launch-doctor.sarif
@@ -209,52 +291,56 @@ jobs:
 
 ## Using with AI coding tools
 
-Launch Doctor writes `LAUNCH_FIXES.md` next to your code. Each problem has the file and line, why it matters, and a prompt to paste. There is also one "fix everything in one go" prompt at the top.
+Launch Doctor outputs `LAUNCH_FIXES.md` directly into your project root. Each entry includes the exact file and line number, an explanation of the risk, and a tailored prompt ready to paste into your AI assistant. It also includes a single batch prompt at the top of the file.
 
-With Claude Code:
+### With Claude Code
 
-```
+```bash
 ! npx launch-doctor
 Fix the issues in LAUNCH_FIXES.md one at a time, starting with the critical ones. Explain each change before making it.
 ```
 
-With Cursor, Lovable, Bolt or Windsurf, paste one prompt at a time into the chat, check the change, then run `npx launch-doctor` again and watch the grade go up.
+### With Cursor, Windsurf, Lovable, or Bolt
+
+1. Run `npx launch-doctor` in your integrated terminal.
+2. Open `LAUNCH_FIXES.md`.
+3. Copy one fix prompt into the chat window.
+4. Review and accept the code edit.
+5. Re-run `npx launch-doctor` to observe your score improve.
 
 ## Privacy and network use
 
-Launch Doctor reads your files locally and never uploads your code, findings or keys anywhere. Secrets are always masked in output (`sk_live_…exe9`).
+Launch Doctor analyzes your codebase locally on your device. Your source code, findings, and credentials are never uploaded to any remote server. Detected secrets are masked in reports (for example, `sk_live_…exe9`).
 
-- **Email DNS check:** this is the only network request Launch Doctor makes. It runs when your app sends email and a sender domain is known (detected in code or given with `--domain`). It sends ordinary DNS queries through your system resolver for that domain's NS and TXT records: the domain itself, `send.<domain>`, `_dmarc.<domain>`, and about 20 common DKIM selector names. No other data is sent. `--offline` turns this off, and `--demo` never makes network requests.
-- **`--history`:** runs `git log` on your machine. No network.
-- **`npx`:** downloads Launch Doctor itself from the npm registry, as for any npx command.
+- **Email DNS validation:** This is the only network check performed. When your project sends transactional email and a domain is identified (either discovered in code or specified via `--domain`), Launch Doctor queries your system DNS resolver for NS and TXT records (including root SPF, `send.<domain>`, `_dmarc.<domain>`, and common DKIM selectors). No code or private data is transmitted. Pass `--offline` to disable DNS lookups entirely. The `--demo` command never touches the network.
+- **Git history analysis (`--history`):** Runs local `git log` commands directly on your system without network requests.
+- **Package installation:** standard `npx` retrieval via the npm registry.
 
 ## Limitations
 
-Launch Doctor is a fast checkup, not a security audit or penetration test.
+Launch Doctor provides rapid pre-launch hygiene, not a full penetration test or manual security audit:
 
-- It reads code with patterns and heuristics, so it can miss real problems and sometimes flag something that's fine. Use `.launchdoctorignore` or an inline ignore for those.
-- It can't see dashboards. Settings made by clicking in Supabase, Firebase, Stripe or your host go on the "check yourself" list instead.
-- It understands JavaScript / TypeScript and Python projects best.
+- It uses pattern analysis and heuristic inspection; it may occasionally flag safe code or miss complex multi-file logic. Use `.launchdoctorignore` or inline comments where appropriate.
+- It cannot inspect third-party web dashboards. Settings configured via web consoles in Supabase, Firebase, Stripe, or cloud hosts appear on the "check yourself" manual checklist.
+- JavaScript, TypeScript, and Python codebases receive the deepest static analysis coverage.
 
-If you handle money or sensitive data, get a human review too.
+For applications processing significant financial transactions or sensitive personal health data, combine automated checks with a human security review.
 
 ## Roadmap
 
-- [ ] Scan a live URL (exposed `.env`, source maps, security headers, open Supabase tables through the anon key)
-- [ ] GitHub Action that comments the report on pull requests
-- [ ] Claude Code plugin / MCP server
-- [ ] More providers: Clerk, Convex, Appwrite, Lemon Squeezy, Paddle
-- [ ] Mobile apps (Expo / React Native)
-
-Ideas and bug reports are welcome. Please open an issue.
+- [ ] Live URL inspection (exposed `.env`, source maps, security headers, open Supabase tables via anonymous key)
+- [ ] GitHub Action bot to post interactive review comments on pull requests
+- [ ] Model Context Protocol (MCP) server for direct Claude Code and Cursor integration
+- [ ] Extended provider coverage (Clerk, Convex, Appwrite, Lemon Squeezy, Paddle)
+- [ ] Mobile framework support (Expo, React Native)
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the project layout and how to add a check. Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local environment setup, architecture notes, and instructions on creating new checks. All contributors are expected to adhere to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 
-Please don't report security problems in public issues. See [SECURITY.md](SECURITY.md) for how to report one privately.
+Please do not report security vulnerabilities in public issues. Refer to [SECURITY.md](SECURITY.md) for instructions on confidential disclosure.
 
 ## License
 
