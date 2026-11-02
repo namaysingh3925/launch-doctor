@@ -90,7 +90,7 @@ export const legalCheck: Check = {
     }
 
     if (auth) {
-      const canDelete = ctx.find(
+      const canDelete = ctx.findCode(
         /delete.{0,3}account|deleteAccount|deleteUser|admin\.deleteUser|delete.{0,3}my.{0,3}(?:account|data)|close.{0,3}account|remove.{0,3}account/i,
         appCode,
         1,

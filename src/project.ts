@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, extname, join, resolve } from 'node:path';
+import { stripComments } from './comments.js';
 import type { Options } from './types.js';
 
 export interface SourceFile {
@@ -189,6 +190,7 @@ export class ProjectContext {
   private readonly byPath = new Map<string, SourceFile>();
   private readonly clientCache = new Map<string, boolean>();
   private readonly lineStarts = new Map<string, number[]>();
+  private readonly codeCache = new Map<string, string>();
 
   private readonly maxFiles: number;
 
@@ -404,6 +406,39 @@ export class ProjectContext {
       g.lastIndex = 0;
       let m: RegExpExecArray | null;
       while ((m = g.exec(file.content))) {
+        out.push({ file, index: m.index, line: this.lineOf(file, m.index), match: m });
+        if (out.length >= limit) return out;
+        if (m[0].length === 0) g.lastIndex++;
+      }
+    }
+    return out;
+  }
+
+  /** The file's text with comments replaced by spaces (same length, same line numbers). Cached. */
+  codeOf(file: SourceFile): string {
+    let code = this.codeCache.get(file.path);
+    if (code === undefined) {
+      code = stripComments(file.content, file.path);
+      this.codeCache.set(file.path, code);
+    }
+    return code;
+  }
+
+  /**
+   * Like find(), but ignores matches inside comments. Use it for checks that look for something
+   * being present (a rate limiter, an auth check...), so commented-out code doesn't count.
+   * Secret scanning keeps using find() on the raw text.
+   */
+  findCode(re: RegExp, filter?: FileFilter, limit = 500): Match[] {
+    const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
+    const g = new RegExp(re.source, flags);
+    const out: Match[] = [];
+    for (const file of this.files) {
+      if (filter && !filter(file)) continue;
+      const code = this.codeOf(file);
+      g.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = g.exec(code))) {
         out.push({ file, index: m.index, line: this.lineOf(file, m.index), match: m });
         if (out.length >= limit) return out;
         if (m[0].length === 0) g.lastIndex++;

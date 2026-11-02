@@ -89,7 +89,7 @@ export const paymentsCheck: Check = {
 
     // ---- Stripe ----
     if (stripeServer || stripeClient || stripeLinks) {
-      const verified = ctx.find(VERIFY_RE, server);
+      const verified = ctx.findCode(VERIFY_RE, server);
       const eventHints = ctx.find(STRIPE_EVENTS_RE, server);
 
       // Helpers that wrap constructEvent (e.g. lib/stripe.ts exporting verifyStripeWebhook) count as verification
@@ -97,7 +97,7 @@ export const paymentsCheck: Check = {
       const helperNames = new Set<string>();
       const helperFiles = uniqueBy(verified, (m) => m.file.path).map((m) => m.file).filter((f) => !isRouteLike(f));
       for (const f of helperFiles) {
-        for (const h of f.content.matchAll(/export\s+(?:async\s+)?function\s+(\w+)|export\s+const\s+(\w+)\s*=/g)) {
+        for (const h of ctx.codeOf(f).matchAll(/export\s+(?:async\s+)?function\s+(\w+)|export\s+const\s+(\w+)\s*=/g)) {
           helperNames.add((h[1] ?? h[2])!);
         }
       }
@@ -110,17 +110,17 @@ export const paymentsCheck: Check = {
       );
 
       if (webhookRoutes.length) {
-        const unverified = webhookRoutes.filter((m) => !isVerified(m.file.content));
+        const unverified = webhookRoutes.filter((m) => !isVerified(ctx.codeOf(m.file)));
         for (const m of unverified) out.findings.push(unverifiedFinding(at(m)));
         for (const m of webhookRoutes) {
           if (unverified.includes(m)) continue;
-          if (parsesJsonFirst(m.file.path, m.file.content)) out.findings.push(parsedBodyFinding(at(m)));
+          if (parsesJsonFirst(m.file.path, ctx.codeOf(m.file))) out.findings.push(parsedBodyFinding(at(m)));
         }
         if (!unverified.length) out.passed.push(SIGNATURE_PASSED);
       } else if (verified.length) {
         out.passed.push(SIGNATURE_PASSED);
         for (const v of uniqueBy(verified, (m) => m.file.path)) {
-          if (parsesJsonFirst(v.file.path, v.file.content)) out.findings.push(parsedBodyFinding(at(v)));
+          if (parsesJsonFirst(v.file.path, ctx.codeOf(v.file))) out.findings.push(parsedBodyFinding(at(v)));
         }
       } else if (eventHints.length) {
         out.findings.push(unverifiedFinding(at(eventHints[0]!)));
@@ -150,8 +150,8 @@ export const paymentsCheck: Check = {
     // ---- Razorpay ----
     if (razorpay) {
       const verified =
-        ctx.find(/validateWebhookSignature|validatePaymentVerification/, server, 1).length > 0 ||
-        ctx.files.some((f) => server(f) && /razorpay_signature|x-razorpay-signature/i.test(f.content) && /createHmac/.test(f.content));
+        ctx.findCode(/validateWebhookSignature|validatePaymentVerification/, server, 1).length > 0 ||
+        ctx.files.some((f) => server(f) && /razorpay_signature|x-razorpay-signature/i.test(ctx.codeOf(f)) && /createHmac/.test(ctx.codeOf(f)));
       if (verified) {
         out.passed.push('Razorpay payments are verified on the server');
       } else {

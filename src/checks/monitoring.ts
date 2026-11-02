@@ -46,7 +46,7 @@ export const monitoringCheck: Check = {
       } else {
         hasBoundary =
           ctx.uses('react-error-boundary') ||
-          ctx.find(/ErrorBoundary|componentDidCatch|errorElement\s*[:=]/, appCode, 1).length > 0;
+          ctx.findCode(/ErrorBoundary|componentDidCatch|errorElement\s*[:=]/, appCode, 1).length > 0;
       }
       if (hasBoundary) {
         out.passed.push('Crashes show an error screen instead of a blank page');

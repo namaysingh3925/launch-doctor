@@ -59,10 +59,10 @@ function matcherEntries(content: string): string[] | null {
  * True when a Next.js-style middleware (or proxy) file blocks signed-out users AND runs on /api routes.
  * Middleware that only refreshes the session (e.g. Supabase's updateSession) doesn't count.
  */
-export function middlewareBlocksApi(f: SourceFile): boolean {
+export function middlewareBlocksApi(f: SourceFile, code = f.content): boolean {
   if (!/(^|\/)(?:src\/)?(middleware|proxy)\.(t|j)s$/.test(f.path)) return false;
-  if (!MIDDLEWARE_BLOCKS.test(f.content)) return false;
-  const entries = matcherEntries(f.content);
+  if (!MIDDLEWARE_BLOCKS.test(code)) return false;
+  const entries = matcherEntries(code);
   if (!entries) return true; // no matcher: runs on every route
   return entries.some((e) => {
     if (/(^|\/)\(?api\b|\(api\||\|api\)/.test(e) && !/\(\?!/.test(e)) return true; // e.g. "/api/:path*" or "/(api|trpc)(.*)"
@@ -116,12 +116,12 @@ export const costsCheck: Check = {
     if (!browserHits.length) out.passed.push('Paid AI APIs are only called from your server');
 
     // 2. AI endpoints that anyone can call
-    const middlewareProtects = ctx.files.some((f) => middlewareBlocksApi(f));
+    const middlewareProtects = ctx.files.some((f) => middlewareBlocksApi(f, ctx.codeOf(f)));
     const aiRoutes = uniqueBy(
       ctx.find(AI_CALL, (f) => server(f) && isRouteLike(f)),
       (m) => m.file.path,
     );
-    const unprotected = middlewareProtects ? [] : aiRoutes.filter((m) => !AUTH_CHECK_RE.test(m.file.content));
+    const unprotected = middlewareProtects ? [] : aiRoutes.filter((m) => !AUTH_CHECK_RE.test(ctx.codeOf(m.file)));
     for (const m of unprotected.slice(0, 3)) {
       out.findings.push({
         id: 'ai-endpoint-no-auth',
@@ -139,7 +139,7 @@ export const costsCheck: Check = {
     // 3. Rate limiting: an imported rate-limit package, or code that really sets up a limiter.
     // (Comments and "RateLimitError" handling don't count.)
     const rateLimited =
-      RATE_LIMIT_PACKAGES.some((p) => ctx.imported(p)) || ctx.find(RATE_LIMIT_USAGE, server, 1).length > 0;
+      RATE_LIMIT_PACKAGES.some((p) => ctx.imported(p)) || ctx.findCode(RATE_LIMIT_USAGE, server, 1).length > 0;
     if (rateLimited) {
       out.passed.push('Rate limiting is in place');
     } else {
