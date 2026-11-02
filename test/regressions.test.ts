@@ -586,3 +586,26 @@ test('a frontend, server routes or a root index.html make it a web app', async (
     assert.equal(category(report, 'monitoring').applicable, true, JSON.stringify(Object.keys(files)));
   }
 });
+
+// ---- Item 20: inline launch-doctor-ignore comments ----
+
+test('a launch-doctor-ignore comment silences one finding at that spot only', async () => {
+  const key = (seed: number) => fakeKey('sk_' + 'live_', 28, seed);
+  const report = await runDoctor(
+    makeProject({
+      'package.json': JSON.stringify({ dependencies: { '@supabase/supabase-js': '2' } }),
+      'server/a.ts': `const a = "${key(31)}"; // launch-doctor-ignore stripe-live-key\n`,
+      'server/b.ts': `// launch-doctor-ignore stripe-live-key, aws-key\nconst b = "${key(32)}";\n`,
+      'server/c.ts': `const c = "${key(33)}"; // launch-doctor-ignore openai-key\n`,
+      'server/d.py': `# launch-doctor-ignore stripe-live-key\nD = "${key(34)}"\n`,
+      'server/e.ts': `/* launch-doctor-ignore stripe-live-key */ const e = "${key(35)}";\n`,
+      'public/f.html': `<!-- launch-doctor-ignore stripe-live-key -->\n<script>const f = "${key(36)}"</script>\n`,
+      'supabase/migrations/001.sql': '-- launch-doctor-ignore supabase-rls-missing\ncreate table logs (id int);\n',
+    }),
+    opts,
+  );
+  const live = category(report, 'secrets').findings.filter((f) => f.id === 'stripe-live-key').map((f) => f.location?.file);
+  assert.deepEqual(live, ['server/c.ts'], 'only the file whose comment names a different id is still reported');
+  assert.ok(!ids(report).includes('supabase-rls-missing'));
+  assert.equal(report.ignored, 6);
+});

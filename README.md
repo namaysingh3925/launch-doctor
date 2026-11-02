@@ -154,6 +154,13 @@ legacy/
 scripts/seed.ts
 ```
 
+To silence one finding in one place, put a `launch-doctor-ignore <id>` comment on the same line or the line above. Any comment style works (`//`, `#`, `/* */`, `<!-- -->`, SQL `--`):
+
+```ts
+// launch-doctor-ignore stripe-test-key
+const STRIPE_TEST_KEY = 'sk_test_...'; // used only by the local seed script
+```
+
 ## Privacy
 
 Launch Doctor runs entirely on your machine. It reads your files, prints a report and writes `LAUNCH_FIXES.md`. Nothing is uploaded. The only network request is an optional DNS lookup for your email domain's SPF/DKIM/DMARC records (skip it with `--offline`). Secrets are always masked in the output (`sk_live_…exe9`).

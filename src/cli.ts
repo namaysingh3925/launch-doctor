@@ -27,6 +27,10 @@ const HELP = `
     -h, --help          Show this help
     -v, --version       Show the version
 
+  ${bold('Ignoring findings')}
+    .launchdoctorignore            one finding id or path per line
+    // launch-doctor-ignore <id>   comment on (or above) a line to silence one finding there
+
   ${bold('Examples')}
     npx launch-doctor
     npx launch-doctor ./my-app --domain myapp.com

@@ -111,7 +111,7 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
   }
 
   if (report.ignored) {
-    lines.push(`  ${dim(`${plural(report.ignored, 'item')} hidden by .launchdoctorignore`)}`, '');
+    lines.push(`  ${dim(`${plural(report.ignored, 'item')} hidden by .launchdoctorignore or launch-doctor-ignore comments`)}`, '');
   }
   if (report.unknownIgnoreIds.length) {
     for (const id of report.unknownIgnoreIds) {

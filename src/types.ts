@@ -63,7 +63,7 @@ export interface Report {
   stack: string[];
   filesScanned: number;
   truncated: boolean;
-  /** Findings and checklist items silenced by .launchdoctorignore. */
+  /** Findings and checklist items silenced by .launchdoctorignore or inline launch-doctor-ignore comments. */
   ignored: number;
   /** Ids in .launchdoctorignore that no check can produce (probably typos). */
   unknownIgnoreIds: string[];

@@ -8,7 +8,7 @@ import { paymentsCheck } from './checks/payments.js';
 import { secretsCheck } from './checks/secrets.js';
 import { overall, scoreCategory, toGrade } from './grade.js';
 import { ProjectContext } from './project.js';
-import type { CategoryResult, Check, CheckOutput, Options, Report } from './types.js';
+import type { CategoryResult, Check, CheckOutput, Finding, Options, Report } from './types.js';
 import { version } from './version.js';
 
 export const CHECKS: Check[] = [
@@ -21,6 +21,24 @@ export const CHECKS: Check[] = [
   legalCheck,
   firstImpressionsCheck,
 ];
+
+const INLINE_IGNORE = /(?:\/\/|#|\/\*|<!--|--)\s*launch-doctor-ignore\s+([a-z0-9-]+(?:\s*,\s*[a-z0-9-]+)*)/g;
+
+/** Is there a launch-doctor-ignore comment for this finding on its line or the line just above? */
+export function isInlineIgnored(ctx: ProjectContext, f: Finding): boolean {
+  const loc = f.location;
+  if (!loc?.line) return false;
+  const file = ctx.file(loc.file);
+  if (!file) return false;
+  const lines = file.content.split(/\r?\n/);
+  for (const text of [lines[loc.line - 1], lines[loc.line - 2]]) {
+    if (!text) continue;
+    for (const m of text.matchAll(INLINE_IGNORE)) {
+      if (m[1]!.split(/\s*,\s*/).includes(f.id)) return true;
+    }
+  }
+  return false;
+}
 
 export async function runDoctor(root: string, options: Options = {}): Promise<Report> {
   const ctx = new ProjectContext(root, options);
@@ -39,6 +57,12 @@ export async function runDoctor(root: string, options: Options = {}): Promise<Re
         passed: [],
         manual: [],
       };
+    }
+    // Inline: a "launch-doctor-ignore <id>" comment on the finding's line or the line above.
+    const inline = out.findings.filter((f) => isInlineIgnored(ctx, f));
+    if (inline.length) {
+      out = { ...out, findings: out.findings.filter((f) => !inline.includes(f)) };
+      ignored += inline.length;
     }
     if (ctx.ignoredIds.size) {
       const before = out.findings.length + out.manual.length;
