@@ -11,7 +11,7 @@ import { CATEGORY_IDS, runDoctor } from './index.js';
 import { bold, dim, renderReport } from './report.js';
 import { renderSarif } from './sarif.js';
 import { renderStepSummary } from './summary.js';
-import type { Severity } from './types.js';
+import type { Report, Severity } from './types.js';
 import { version } from './version.js';
 
 const HELP = `
@@ -188,7 +188,7 @@ async function main(): Promise<void> {
   const root = resolve(args.path ?? '.');
   if (!existsSync(root) || !statSync(root).isDirectory()) fail(`Folder not found: ${root}`);
 
-  let report;
+  let report: Report;
   try {
     report = await runDoctor(root, {
       offline: args.offline,

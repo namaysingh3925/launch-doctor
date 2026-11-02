@@ -1,7 +1,7 @@
 {
   "name": "launch-doctor",
   "version": "0.1.0",
-  "description": "A pre-launch checkup for vibe-coded apps. Grades your project A–F on secrets, payments, database safety, email, error tracking, AI costs, legal pages and first impressions — and gives you copy-paste prompts to fix each issue.",
+  "description": "A pre-launch checkup for vibe-coded apps. Grades your project A-F on secrets, database safety, payments, AI costs, email, error tracking, legal pages and first impressions, with a copy-paste fix prompt for every issue.",
   "type": "module",
   "bin": {
     "launch-doctor": "dist/src/cli.js"
@@ -11,11 +11,16 @@
   "files": [
     "dist/src",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc",
     "prepare": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
     "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
     "start": "node dist/src/cli.js",
     "doctor": "npm run build && node dist/src/cli.js",
@@ -24,23 +29,34 @@
   "engines": {
     "node": ">=22"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/namaysingh3925/launch-doctor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/namaysingh3925/launch-doctor/issues"
+  },
+  "homepage": "https://github.com/namaysingh3925/launch-doctor#readme",
   "keywords": [
-    "vibe-coding",
-    "launch",
-    "checklist",
+    "launch-readiness",
     "production-readiness",
+    "vibe-coding",
     "security",
+    "secrets",
     "supabase",
     "stripe",
+    "firebase",
+    "nextjs",
     "lovable",
-    "bolt",
     "cursor",
     "claude-code",
+    "sarif",
     "cli"
   ],
-  "author": "namay",
+  "author": "Namay Singh",
   "license": "MIT",
   "devDependencies": {
+    "@biomejs/biome": "2.6.4",
     "@types/node": "^26.6.6",
     "typescript": "^7.0.2"
   }

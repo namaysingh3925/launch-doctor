@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { type Dirent, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, extname, join, resolve } from 'node:path';
 import { stripComments } from './comments.js';
@@ -266,7 +266,7 @@ export class ProjectContext {
     scan: while (stack.length) {
       const rel = stack.pop()!;
       const abs = rel ? join(this.root, rel) : this.root;
-      let entries;
+      let entries: Dirent[];
       try {
         entries = readdirSync(abs, { withFileTypes: true });
       } catch {

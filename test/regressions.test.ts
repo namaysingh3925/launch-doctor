@@ -236,6 +236,7 @@ test('an AI route that only sends an Authorization header upstream is still unpr
     makeProject({
       'package.json': JSON.stringify({ dependencies: { next: '16', openai: '5' } }),
       'app/api/chat/route.ts':
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: this string is sample source code with a template literal in it
         "import OpenAI from 'openai';\nconst openai = new OpenAI({ defaultHeaders: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });\nexport async function POST() {\n  return Response.json(await openai.chat.completions.create({ model: 'gpt-5', messages: [] }));\n}\n",
     }),
     opts,

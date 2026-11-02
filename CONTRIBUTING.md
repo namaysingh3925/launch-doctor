@@ -17,6 +17,16 @@ npm run doctor -- --demo  # run the CLI against the built-in sample app
 npm run doctor -- ../some-app
 ```
 
+Before opening a pull request, also run:
+
+```bash
+npm run typecheck         # tsc --noEmit
+npm run lint              # Biome linter
+npm run format            # Biome formatter (npm run format:check only reports)
+```
+
+CI runs `format:check`, `lint` and `typecheck` on every pull request.
+
 ## Project layout
 
 ```
