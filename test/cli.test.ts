@@ -89,3 +89,16 @@ test('helpful errors for bad input', () => {
   assert.equal(run(['--domain', 'not a domain']).status, 2);
   assert.match(run(['--version']).stdout, /^\d+\.\d+\.\d+/);
 });
+
+test('--fail-on picks which severity fails a --ci run', () => {
+  const warningsOnly = () =>
+    makeProject({ 'package.json': '{"name":"w","dependencies":{"react":"^19","vite":"^7"}}', 'index.html': '<title>Vite + React</title>' });
+  assert.equal(run([warningsOnly(), '--offline', '--ci']).status, 0, 'warnings alone pass by default');
+  assert.equal(run([warningsOnly(), '--offline', '--ci', '--fail-on', 'warning']).status, 1);
+  assert.equal(run([warningsOnly(), '--offline', '--ci', '--fail-on=critical']).status, 0);
+  assert.equal(run([leaky(), '--offline', '--ci', '--fail-on', 'critical']).status, 1);
+  const bad = run([warningsOnly(), '--fail-on', 'info']);
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /--fail-on must be "critical" or "warning"/);
+  assert.match(run(['--help']).stdout, /--fail-on <level>/);
+});

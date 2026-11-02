@@ -105,6 +105,7 @@ npx launch-doctor [folder] [options]
   --json              Print the full report as JSON
   --offline           Skip network checks
   --ci                Exit with code 1 if there are critical issues
+  --fail-on <level>   With --ci, the lowest severity that fails: critical (default) or warning
   --demo              Try it on a sample app full of mistakes
 ```
 
@@ -124,8 +125,11 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - run: npx launch-doctor --ci --no-file
+      - run: npx launch-doctor --ci
 ```
+
+By default `--ci` fails only on critical issues. Use `--fail-on warning` to fail on warnings too.
+`--ci` and `--json` don't write `LAUNCH_FIXES.md` unless you pass `--out`.
 
 ## Use it with Claude Code
 

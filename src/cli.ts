@@ -3,8 +3,10 @@ import { existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { createDemoProject } from './demo.js';
 import { renderFixes } from './fixes.js';
+import { failingFindings } from './grade.js';
 import { runDoctor } from './index.js';
 import { bold, dim, renderReport } from './report.js';
+import type { Severity } from './types.js';
 import { version } from './version.js';
 
 const HELP = `
@@ -20,6 +22,7 @@ const HELP = `
     --json              Print the full report as JSON (no fix file unless --out is given)
     --offline           Skip network checks
     --ci                Exit with code 1 if there are critical issues (no fix file unless --out)
+    --fail-on <level>   With --ci, the lowest severity that fails: critical (default) or warning
     --demo              Try it on a sample app full of mistakes
     -h, --help          Show this help
     -v, --version       Show the version
@@ -27,7 +30,7 @@ const HELP = `
   ${bold('Examples')}
     npx launch-doctor
     npx launch-doctor ./my-app --domain myapp.com
-    npx launch-doctor --ci --no-file
+    npx launch-doctor --ci --fail-on warning
 `;
 
 interface Args {
@@ -38,13 +41,16 @@ interface Args {
   json: boolean;
   offline: boolean;
   ci: boolean;
+  failOn: Severity;
   demo: boolean;
   help: boolean;
   version: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { writeFile: true, json: false, offline: false, ci: false, demo: false, help: false, version: false };
+  const args: Args = {
+    writeFile: true, json: false, offline: false, ci: false, failOn: 'critical', demo: false, help: false, version: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     const value = () => {
@@ -61,6 +67,8 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--no-file') args.writeFile = false;
     else if (a === '--domain') args.domain = cleanDomain(value());
     else if (a.startsWith('--domain=')) args.domain = cleanDomain(a.slice(9));
+    else if (a === '--fail-on') args.failOn = severityArg(value());
+    else if (a.startsWith('--fail-on=')) args.failOn = severityArg(a.slice(10));
     else if (a === '--out') args.out = value();
     else if (a.startsWith('--out=')) args.out = a.slice(6);
     else if (a.startsWith('-')) fail(`Unknown option ${a}. Run with --help to see the options.`);
@@ -70,6 +78,11 @@ function parseArgs(argv: string[]): Args {
   // Machine-readable and CI runs shouldn't leave files behind unless asked to.
   if ((args.json || args.ci) && !args.out) args.writeFile = false;
   return args;
+}
+
+function severityArg(input: string): Severity {
+  if (input === 'critical' || input === 'warning') return input;
+  fail(`--fail-on must be "critical" or "warning", not "${input}"`);
 }
 
 /** "https://www.MyApp.com/pricing" -> "myapp.com" */
@@ -135,7 +148,7 @@ async function main(): Promise<void> {
   if (args.json) process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   else process.stdout.write(renderReport(report, { fixFile }));
 
-  if (args.ci && report.counts.critical > 0) process.exitCode = 1;
+  if (args.ci && failingFindings(report, args.failOn).length > 0) process.exitCode = 1;
 }
 
 main().catch((err) => {

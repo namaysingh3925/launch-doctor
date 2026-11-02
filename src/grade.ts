@@ -1,4 +1,4 @@
-import type { CategoryResult, CheckOutput, Grade } from './types.js';
+import type { CategoryResult, CheckOutput, Finding, Grade, Report, Severity } from './types.js';
 import { plural } from './util.js';
 
 const CRITICAL_COST = 50;
@@ -47,4 +47,11 @@ export function overall(categories: CategoryResult[]) {
         : 'Looks ready to launch';
 
   return { score, grade: toGrade(score), verdict, counts: { critical, warning, manual } };
+}
+
+/** Findings at or above a severity level: the ones that should fail a CI run. */
+export function failingFindings(report: Report, failOn: Severity): Finding[] {
+  return report.categories
+    .flatMap((c) => c.findings)
+    .filter((f) => f.severity === 'critical' || failOn === 'warning');
 }
