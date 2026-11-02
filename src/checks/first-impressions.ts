@@ -25,8 +25,9 @@ export const firstImpressionsCheck: Check = {
   ],
   run(ctx) {
     const frontend =
-      ctx.files.some((f) => /\.html?$/i.test(f.path)) ||
+      ctx.files.some((f) => /\.html?$/i.test(f.path) && !/(^|\/)(docs|coverage)\//.test(f.path)) ||
       ctx.usesAny(['react', 'vue', 'svelte', 'next', 'nuxt', 'astro', '@sveltejs/kit', 'solid-js', 'preact', '@angular/core']);
+    if (!ctx.isWebApp) return notApplicable('Not a web app');
     if (!frontend) return notApplicable('No website frontend found');
     const out = emptyOutput();
 

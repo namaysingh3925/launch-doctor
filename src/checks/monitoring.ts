@@ -18,7 +18,7 @@ export const monitoringCheck: Check = {
   weight: 1,
   ids: ['no-error-tracking', 'no-error-boundary', 'uptime-monitor', 'know-your-logs'],
   run(ctx) {
-    if (!ctx.files.some(appCode)) return notApplicable('No app code found');
+    if (!ctx.isWebApp) return notApplicable('Not a web app');
     const out = emptyOutput();
 
     const tracker = TRACKERS.find(([pkg]) => ctx.uses(pkg))?.[1];

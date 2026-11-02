@@ -21,7 +21,7 @@ export const legalCheck: Check = {
   weight: 1,
   ids: ['no-privacy-policy', 'no-terms', 'no-refund-policy', 'no-contact', 'no-account-deletion', 'cookie-consent'],
   run(ctx) {
-    if (!ctx.files.some(appCode)) return notApplicable('No app code found');
+    if (!ctx.isWebApp) return notApplicable('Not a web app');
     const out = emptyOutput();
 
     const auth = detectAuth(ctx);

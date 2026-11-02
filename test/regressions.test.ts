@@ -556,3 +556,33 @@ test('a DKIM record with only the public key (p=...) is recognised', async () =>
   const dns = await checkEmailDns('myapp.com', fakeDns({ 's1._domainkey.myapp.com': ['p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC'] }));
   assert.equal(dns.dkim, true);
 });
+
+// ---- Item 17: monitoring, legal and first impressions only apply to web apps ----
+
+test('a command-line tool or library is not treated as a web app', async () => {
+  const report = await runDoctor(
+    makeProject({
+      'package.json': JSON.stringify({ name: 'my-cli', bin: { x: 'cli.js' }, dependencies: { stripe: '18' } }),
+      'src/cli.ts': "import Stripe from 'stripe';\nconsole.log(new Stripe('x'));\n",
+      'docs/index.html': '<title>Docs</title>',
+      'coverage/index.html': '<title>Coverage</title>',
+    }),
+    opts,
+  );
+  for (const id of ['monitoring', 'legal', 'first-impressions']) {
+    assert.equal(category(report, id).applicable, false, `${id} should not apply`);
+  }
+});
+
+test('a frontend, server routes or a root index.html make it a web app', async () => {
+  const variants: Record<string, string>[] = [
+    { 'package.json': JSON.stringify({ dependencies: { vue: '3' } }), 'src/App.vue': '<template/>' },
+    { 'app.py': 'from flask import Flask\napp = Flask(__name__)\n@app.route("/")\ndef home():\n    return "hi"\n' },
+    { 'index.html': '<title>My site</title>' },
+    { 'public/index.html': '<title>My site</title>' },
+  ];
+  for (const files of variants) {
+    const report = await runDoctor(makeProject(files), opts);
+    assert.equal(category(report, 'monitoring').applicable, true, JSON.stringify(Object.keys(files)));
+  }
+});

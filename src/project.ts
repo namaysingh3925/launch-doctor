@@ -88,6 +88,22 @@ function shouldRead(name: string): boolean {
   return TEXT_EXT.has(extname(lower));
 }
 
+/** Does this file handle HTTP requests (an API route, server action, edge function, Express/Flask route)? */
+export function isRouteLike(f: SourceFile): boolean {
+  return (
+    /(^|\/)(api|routes?|functions|server|actions?|trpc|handlers?)\//.test(f.path) ||
+    /(^|\/)route\.(t|j)s$|\+server\.(t|j)s$|\.server\.(t|j)s$|(^|\/)actions?\.(t|j)s$/.test(f.path) ||
+    /["']use server["']/.test(f.content) ||
+    /\b(?:app|router)\.(?:post|get|all)\s*\(|Deno\.serve\s*\(|\bserve\s*\(\s*async/.test(f.content) ||
+    /@(?:app|router|bp|blueprint|api)\.(?:route|get|post|put|patch|delete)\s*\(|\burlpatterns\s*=/.test(f.content)
+  );
+}
+
+const FRONTEND_PACKAGES = [
+  'react', 'react-dom', 'vue', 'svelte', 'next', 'nuxt', 'astro', '@sveltejs/kit', 'solid-js', 'preact',
+  '@angular/core', '@remix-run/react', 'lit',
+];
+
 /** Turn an import specifier into a package name ("@scope/pkg/sub@1" -> "@scope/pkg"). */
 export function packageNameOf(spec: string): string | null {
   let s = spec
@@ -161,6 +177,11 @@ export class ProjectContext {
   readonly scripts: string[] = [];
   readonly gitRoot: string | null;
   readonly isSpa: boolean;
+  /**
+   * Is this a web app (a frontend, server routes, or an index.html page)?
+   * Monitoring, legal pages and first impressions only matter for web apps.
+   */
+  readonly isWebApp: boolean;
   /** Finding / checklist ids silenced in .launchdoctorignore. */
   readonly ignoredIds = new Set<string>();
   private ignoredPathRules = '';
@@ -200,6 +221,12 @@ export class ProjectContext {
       '@react-router/node', '@react-router/serve', '@tanstack/react-start', '@tanstack/start', 'vike',
     ];
     this.isSpa = (this.uses('vite') || this.uses('react-scripts')) && !fullStack.some((p) => this.uses(p));
+
+    // HTML under docs/ (and coverage/, node_modules/, which are never read) doesn't make a project a website.
+    this.isWebApp =
+      this.usesAny(FRONTEND_PACKAGES) ||
+      this.files.some((f) => isCodeFile(f) && !isTestPath(f.path) && !/(^|\/)docs\//.test(f.path) && isRouteLike(f)) ||
+      this.paths.some((p) => /^(?:public\/)?index\.html?$/i.test(p));
   }
 
   // ---------- reading the project ----------

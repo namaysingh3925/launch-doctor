@@ -2,9 +2,3 @@
 # The demo app and the tests contain launch mistakes on purpose, so skip them.
 src/demo.ts
 test/
-
-# This is a command-line tool, not a website with users.
-no-error-tracking
-no-privacy-policy
-no-terms
-no-refund-policy

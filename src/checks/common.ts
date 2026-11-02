@@ -1,4 +1,6 @@
 import { isCodeFile, isTestPath, type Match, type ProjectContext, type SourceFile } from '../project.js';
+
+export { isRouteLike } from '../project.js';
 import type { CheckOutput, Location } from '../types.js';
 
 export function emptyOutput(): CheckOutput {
@@ -27,16 +29,6 @@ export function shortWhere(loc?: Location): string {
 
 /** App code we care about: real source files, not tests. */
 export const appCode = (f: SourceFile): boolean => isCodeFile(f) && !isTestPath(f.path);
-
-/** Does this file handle HTTP requests (an API route, server action, edge function, Express/Flask route)? */
-export function isRouteLike(f: SourceFile): boolean {
-  return (
-    /(^|\/)(api|routes?|functions|server|actions?|trpc|handlers?)\//.test(f.path) ||
-    /(^|\/)route\.(t|j)s$|\+server\.(t|j)s$|\.server\.(t|j)s$|(^|\/)actions?\.(t|j)s$/.test(f.path) ||
-    /["']use server["']/.test(f.content) ||
-    /\b(?:app|router)\.(?:post|get|all)\s*\(|Deno\.serve\s*\(|\bserve\s*\(\s*async/.test(f.content)
-  );
-}
 
 /** App code that runs on the server. */
 export function serverCode(ctx: ProjectContext) {
