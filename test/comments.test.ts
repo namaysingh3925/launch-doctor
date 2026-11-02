@@ -42,7 +42,8 @@ test('commented-out code does not count as protection', async () => {
     makeProject({
       'package.json': JSON.stringify({ dependencies: { next: '16', react: '19', stripe: '18', openai: '5' } }),
       'app/page.tsx': 'export default function Home() { return null; }\n',
-      'app/layout.tsx': '// TODO: wrap in <ErrorBoundary>\nexport default function L({ children }) { return children; }\n',
+      'app/layout.tsx':
+        '// TODO: wrap in <ErrorBoundary>\nexport default function L({ children }) { return children; }\n',
       'app/api/webhook/route.ts':
         "import Stripe from 'stripe';\nexport async function POST(req: Request) {\n  const body = await req.text();\n  // const event = stripe.webhooks.constructEvent(body, sig, secret);\n  const event = JSON.parse(body);\n  if (event.type === 'checkout.session.completed') {}\n  return new Response('ok');\n}\n",
       'app/api/chat/route.ts':
@@ -71,7 +72,10 @@ test('real code next to a URL string is still found', async () => {
 
 test('secret scanning still looks inside comments', async () => {
   const report = await runDoctor(
-    makeProject({ 'package.json': '{}', 'server/a.ts': `// old key: ${'sk_' + 'live_' + 'Q7wZp2Lk9VtR4mXc8Bn3Hs6Jd'}\n` }),
+    makeProject({
+      'package.json': '{}',
+      'server/a.ts': `// old key: ${'sk_' + 'live_' + 'Q7wZp2Lk9VtR4mXc8Bn3Hs6Jd'}\n`,
+    }),
     opts,
   );
   assert.ok(ids(report).includes('stripe-live-key'));

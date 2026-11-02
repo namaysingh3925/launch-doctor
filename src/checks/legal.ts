@@ -26,12 +26,24 @@ export const legalCheck: Check = {
     const auth = detectAuth(ctx);
     const payments = detectPayments(ctx);
     const collectsData =
-      !!auth || payments || detectDatabase(ctx).length > 0 || detectEmailProviders(ctx).length > 0 || detectCookieAnalytics(ctx);
+      !!auth ||
+      payments ||
+      detectDatabase(ctx).length > 0 ||
+      detectEmailProviders(ctx).length > 0 ||
+      detectCookieAnalytics(ctx);
     const policyService = ctx.find(POLICY_SERVICES, appCode, 1).length > 0;
 
     const hasPrivacy = policyService || hasPage(ctx, ['privacy', 'privacy-policy', 'privacypolicy', 'datenschutz']);
-    const hasTerms = policyService || hasPage(ctx, ['terms', 'tos', 'terms-of-service', 'terms-and-conditions', 'terms-of-use']);
-    const hasRefund = hasPage(ctx, ['refund', 'refunds', 'refund-policy', 'cancellation', 'cancellation-policy', 'returns']);
+    const hasTerms =
+      policyService || hasPage(ctx, ['terms', 'tos', 'terms-of-service', 'terms-and-conditions', 'terms-of-use']);
+    const hasRefund = hasPage(ctx, [
+      'refund',
+      'refunds',
+      'refund-policy',
+      'cancellation',
+      'cancellation-policy',
+      'returns',
+    ]);
     const hasContact = hasPage(ctx, ['contact', 'contact-us']) || ctx.find(/mailto:/, appCode, 1).length > 0;
 
     if (collectsData) {
@@ -57,10 +69,10 @@ export const legalCheck: Check = {
           id: 'no-terms',
           severity: 'warning',
           title: 'No terms of service page',
-          why: 'Terms set the rules: what people may do with your app, what you are and aren\'t responsible for, and when you can close an account. Payment providers usually expect them too.',
+          why: "Terms set the rules: what people may do with your app, what you are and aren't responsible for, and when you can close an account. Payment providers usually expect them too.",
           fixPrompt:
             'Create a /terms page with simple terms of service for my app (acceptable use, accounts, payments and refunds if any, limitation of liability, how I can change the terms, contact email). ' +
-            "Keep it short and readable, link it in the footer and sign-up form, and remind me to get it reviewed.",
+            'Keep it short and readable, link it in the footer and sign-up form, and remind me to get it reviewed.',
         });
       }
     }
@@ -83,25 +95,27 @@ export const legalCheck: Check = {
           id: 'no-contact',
           severity: 'warning',
           title: 'No contact page or email',
-          why: "People paying you need a way to reach you. Without one they go straight to a chargeback, and payment providers may refuse to activate your account.",
-          fixPrompt: 'Add a simple /contact page (or a footer link) with a support email address, and link it from the footer and pricing page.',
+          why: 'People paying you need a way to reach you. Without one they go straight to a chargeback, and payment providers may refuse to activate your account.',
+          fixPrompt:
+            'Add a simple /contact page (or a footer link) with a support email address, and link it from the footer and pricing page.',
         });
       }
     }
 
     if (auth) {
-      const canDelete = ctx.findCode(
-        /delete.{0,3}account|deleteAccount|deleteUser|admin\.deleteUser|delete.{0,3}my.{0,3}(?:account|data)|close.{0,3}account|remove.{0,3}account/i,
-        appCode,
-        1,
-      ).length > 0;
+      const canDelete =
+        ctx.findCode(
+          /delete.{0,3}account|deleteAccount|deleteUser|admin\.deleteUser|delete.{0,3}my.{0,3}(?:account|data)|close.{0,3}account|remove.{0,3}account/i,
+          appCode,
+          1,
+        ).length > 0;
       if (canDelete) out.passed.push('Users can delete their account');
       else {
         out.findings.push({
           id: 'no-account-deletion',
           severity: 'warning',
           title: "Users can't delete their account",
-          why: "Privacy laws give people the right to have their data deleted, and the Apple and Google app stores require an in-app way to delete accounts.",
+          why: 'Privacy laws give people the right to have their data deleted, and the Apple and Google app stores require an in-app way to delete accounts.',
           fixPrompt:
             `Add a "Delete my account" option to the settings page of my app (auth: ${auth}). It should ask for confirmation, delete the user's data and their auth account on the server, ` +
             'sign them out, and cancel any active subscription. Do the deletion in server-side code, not in the browser.',

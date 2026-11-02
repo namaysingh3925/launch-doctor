@@ -50,7 +50,10 @@ test('--json prints valid JSON', () => {
 });
 
 test('--domain accepts full URLs in both forms', () => {
-  for (const flag of [['--domain', 'https://www.Example-App.com/pricing'], ['--domain=https://www.Example-App.com/pricing']]) {
+  for (const flag of [
+    ['--domain', 'https://www.Example-App.com/pricing'],
+    ['--domain=https://www.Example-App.com/pricing'],
+  ]) {
     const res = run([leaky(), '--offline', '--json', '--no-file', ...flag]);
     assert.equal(res.status, 0, res.stderr);
   }
@@ -75,7 +78,13 @@ test('--demo scans the built-in sample app and cleans up after itself', () => {
   assert.equal(report.grade, 'F');
   assert.ok(!existsSync(report.root), 'demo folder should be deleted');
   const found = report.categories.flatMap((c: { findings: { id: string }[] }) => c.findings.map((f) => f.id));
-  for (const id of ['stripe-live-key', 'public-secret-variable', 'supabase-rls-missing', 'stripe-webhook-unverified', 'ai-in-browser']) {
+  for (const id of [
+    'stripe-live-key',
+    'public-secret-variable',
+    'supabase-rls-missing',
+    'stripe-webhook-unverified',
+    'ai-in-browser',
+  ]) {
     assert.ok(found.includes(id), `demo should show ${id}`);
   }
 });
@@ -92,7 +101,10 @@ test('helpful errors for bad input', () => {
 
 test('--fail-on picks which severity fails a --ci run', () => {
   const warningsOnly = () =>
-    makeProject({ 'package.json': '{"name":"w","dependencies":{"react":"^19","vite":"^7"}}', 'index.html': '<title>Vite + React</title>' });
+    makeProject({
+      'package.json': '{"name":"w","dependencies":{"react":"^19","vite":"^7"}}',
+      'index.html': '<title>Vite + React</title>',
+    });
   assert.equal(run([warningsOnly(), '--offline', '--ci']).status, 0, 'warnings alone pass by default');
   assert.equal(run([warningsOnly(), '--offline', '--ci', '--fail-on', 'warning']).status, 1);
   assert.equal(run([warningsOnly(), '--offline', '--ci', '--fail-on=critical']).status, 0);
@@ -110,7 +122,11 @@ test('--only and --skip choose categories; skipped ones do not count toward the 
   assert.equal(byId(only, 'secrets').skipped, true);
   assert.equal(byId(only, 'secrets').grade, null);
   assert.equal(byId(only, 'first-impressions').skipped, undefined);
-  assert.notEqual(only.grade, 'F', 'the critical Stripe key is in a skipped category, so it must not drag the grade down');
+  assert.notEqual(
+    only.grade,
+    'F',
+    'the critical Stripe key is in a skipped category, so it must not drag the grade down',
+  );
 
   const skip = JSON.parse(run([leaky(), '--offline', '--json', '--skip=secrets,payments']).stdout);
   assert.equal(byId(skip, 'secrets').skipped, true);
@@ -178,7 +194,8 @@ test('--sarif writes SARIF 2.1.0 with one rule per finding id and one result per
   assert.match(rule.shortDescription.text, /Stripe live secret key/);
   assert.match(rule.help.text, /Prompt to paste/);
   assert.ok(runEntry.results.some((r: { level: string }) => r.level === 'warning'));
-  for (const r of runEntry.results) assert.ok(r.locations[0].physicalLocation.artifactLocation.uri, 'every result has a location');
+  for (const r of runEntry.results)
+    assert.ok(r.locations[0].physicalLocation.artifactLocation.uri, 'every result has a location');
   assert.match(run(['--help']).stdout, /--sarif <file>/);
 });
 
@@ -190,12 +207,16 @@ test('--update-baseline records findings; later runs only fail on new ones', asy
   assert.match(update.stdout, /Saved \d+ findings to \.launchdoctor-baseline\.json/);
   const saved = JSON.parse(readFileSync(join(dir, '.launchdoctor-baseline.json'), 'utf8'));
   assert.ok(saved.findings.length > 0);
-  assert.ok(saved.findings.every((f: { fingerprint: string }) => /^[a-z0-9-]+\|[^|]*\|[0-9a-f]{16}$/.test(f.fingerprint)));
+  assert.ok(
+    saved.findings.every((f: { fingerprint: string }) => /^[a-z0-9-]+\|[^|]*\|[0-9a-f]{16}$/.test(f.fingerprint)),
+  );
 
   // Same problems: CI passes, findings are marked and collapsed.
   assert.equal(run([dir, '--offline', '--ci']).status, 0);
   const json = JSON.parse(run([dir, '--offline', '--json']).stdout);
-  const key = json.categories.flatMap((c: { findings: { id: string; baseline?: boolean }[] }) => c.findings).find((f: { id: string }) => f.id === 'stripe-live-key');
+  const key = json.categories
+    .flatMap((c: { findings: { id: string; baseline?: boolean }[] }) => c.findings)
+    .find((f: { id: string }) => f.id === 'stripe-live-key');
   assert.equal(key.baseline, true);
   assert.ok(json.counts.baseline > 0);
   assert.match(run([dir, '--offline', '--no-file']).stdout, /existing issues? \(baseline\)/);

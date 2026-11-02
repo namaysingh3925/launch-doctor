@@ -25,17 +25,21 @@ const files: Record<string, string> = {
   'app/layout.tsx':
     "export const metadata = { title: 'Acme Notes', description: 'Notes that organise themselves for busy teams.', openGraph: { images: ['/og.png'] } };\nexport default function RootLayout({ children }: any) { return <html><body>{children}<footer><a href=\"/privacy\">Privacy</a></footer></body></html>; }\n",
   'app/page.tsx': 'export default function Home() { return <main>Hi</main>; }\n',
-  'app/error.tsx': "'use client';\nexport default function Error({ reset }: any) { return <button onClick={reset}>Try again</button>; }\n",
+  'app/error.tsx':
+    "'use client';\nexport default function Error({ reset }: any) { return <button onClick={reset}>Try again</button>; }\n",
   'app/not-found.tsx': 'export default function NotFound() { return <p>Not found</p>; }\n',
   'app/privacy/page.tsx': 'export default function Privacy() { return <p>Privacy policy</p>; }\n',
   'app/terms/page.tsx': 'export default function Terms() { return <p>Terms</p>; }\n',
   'app/refund/page.tsx': 'export default function Refund() { return <p>Refunds</p>; }\n',
-  'app/contact/page.tsx': 'export default function Contact() { return <a href="mailto:hi@acme-notes.app">Email us</a>; }\n',
-  'app/robots.ts': 'export default function robots() { return { rules: { userAgent: "*" }, sitemap: "/sitemap.xml" }; }\n',
+  'app/contact/page.tsx':
+    'export default function Contact() { return <a href="mailto:hi@acme-notes.app">Email us</a>; }\n',
+  'app/robots.ts':
+    'export default function robots() { return { rules: { userAgent: "*" }, sitemap: "/sitemap.xml" }; }\n',
   'app/sitemap.ts': 'export default function sitemap() { return []; }\n',
   'app/login/page.tsx':
     "'use client';\nimport { createBrowserClient } from '@supabase/ssr';\nconst supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);\nexport default function Login() { return <button onClick={() => supabase.auth.signInWithPassword({ email: '', password: '' })}>Log in</button>; }\n",
-  'app/settings/page.tsx': "export default function Settings() { return <form action=\"/api/delete-account\"><button>Delete account</button></form>; }\n",
+  'app/settings/page.tsx':
+    'export default function Settings() { return <form action="/api/delete-account"><button>Delete account</button></form>; }\n',
   'app/api/webhook/route.ts':
     "import Stripe from 'stripe';\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);\nexport async function POST(req: Request) {\n  const body = await req.text();\n  const event = stripe.webhooks.constructEvent(body, req.headers.get('stripe-signature')!, process.env.STRIPE_WEBHOOK_SECRET!);\n  if (event.type === 'checkout.session.completed') {}\n  return new Response('ok');\n}\n",
   'app/api/chat/route.ts':
@@ -67,7 +71,14 @@ test('passed checks are reported so people see what they got right', async () =>
 test('things we cannot verify end up on the checklist', async () => {
   const report = await runDoctor(makeProject(files), { offline: true, useGit: false });
   const manual = manualIds(report);
-  for (const id of ['backups', 'live-test-purchase', 'spending-limits', 'email-dns', 'supabase-smtp', 'uptime-monitor']) {
+  for (const id of [
+    'backups',
+    'live-test-purchase',
+    'spending-limits',
+    'email-dns',
+    'supabase-smtp',
+    'uptime-monitor',
+  ]) {
     assert.ok(manual.includes(id), `expected checklist item ${id}`);
   }
 });
@@ -82,7 +93,10 @@ test('the stack is detected for the report header', async () => {
 
 test('categories that do not apply are skipped, not failed', async () => {
   const report = await runDoctor(
-    makeProject({ 'package.json': '{"name":"tiny","dependencies":{"react":"^19"}}', 'src/App.jsx': 'export default () => <h1>Hi</h1>;\n' }),
+    makeProject({
+      'package.json': '{"name":"tiny","dependencies":{"react":"^19"}}',
+      'src/App.jsx': 'export default () => <h1>Hi</h1>;\n',
+    }),
     { offline: true, useGit: false },
   );
   for (const id of ['payments', 'database', 'costs', 'email']) {

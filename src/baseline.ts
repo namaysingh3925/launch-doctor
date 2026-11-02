@@ -58,7 +58,11 @@ export function writeBaseline(root: string, report: Report): number {
     tool: 'launch-doctor',
     version: 1,
     generatedAt: report.generatedAt,
-    findings: findings.map((f) => ({ fingerprint: f.fingerprint!, id: f.id, ...(f.location ? { file: f.location.file } : {}) })),
+    findings: findings.map((f) => ({
+      fingerprint: f.fingerprint!,
+      id: f.id,
+      ...(f.location ? { file: f.location.file } : {}),
+    })),
   };
   writeFileSync(join(root, BASELINE_FILE), `${JSON.stringify(data, null, 2)}\n`);
   return findings.length;

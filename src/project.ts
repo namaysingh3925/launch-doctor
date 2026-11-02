@@ -36,21 +36,58 @@ const SKIP_DIRS = new Set([
 ]);
 
 const CODE_EXT = new Set([
-  '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts',
-  '.vue', '.svelte', '.astro', '.html', '.htm',
-  '.py', '.rb', '.php', '.go',
+  '.js',
+  '.jsx',
+  '.ts',
+  '.tsx',
+  '.mjs',
+  '.cjs',
+  '.mts',
+  '.cts',
+  '.vue',
+  '.svelte',
+  '.astro',
+  '.html',
+  '.htm',
+  '.py',
+  '.rb',
+  '.php',
+  '.go',
 ]);
 
 const TEXT_EXT = new Set([
   ...CODE_EXT,
-  '.json', '.toml', '.yaml', '.yml', '.sql', '.rules', '.prisma', '.md', '.mdx', '.txt', '.xml',
+  '.json',
+  '.toml',
+  '.yaml',
+  '.yml',
+  '.sql',
+  '.rules',
+  '.prisma',
+  '.md',
+  '.mdx',
+  '.txt',
+  '.xml',
 ]);
 
-const SPECIAL_NAMES = new Set(['firestore.rules', 'storage.rules', 'database.rules.json', '.gitignore', 'dockerfile', 'procfile']);
+const SPECIAL_NAMES = new Set([
+  'firestore.rules',
+  'storage.rules',
+  'database.rules.json',
+  '.gitignore',
+  'dockerfile',
+  'procfile',
+]);
 
 const SKIP_FILES = new Set([
-  'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', 'bun.lock', 'bun.lockb', 'npm-shrinkwrap.json',
-  'launch_fixes.md', '.launchdoctor-baseline.json',
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'bun.lock',
+  'bun.lockb',
+  'npm-shrinkwrap.json',
+  'launch_fixes.md',
+  '.launchdoctor-baseline.json',
 ]);
 
 const MAX_FILES = 20_000;
@@ -101,8 +138,19 @@ export function isRouteLike(f: SourceFile): boolean {
 }
 
 const FRONTEND_PACKAGES = [
-  'react', 'react-dom', 'vue', 'svelte', 'next', 'nuxt', 'astro', '@sveltejs/kit', 'solid-js', 'preact',
-  '@angular/core', '@remix-run/react', 'lit',
+  'react',
+  'react-dom',
+  'vue',
+  'svelte',
+  'next',
+  'nuxt',
+  'astro',
+  '@sveltejs/kit',
+  'solid-js',
+  'preact',
+  '@angular/core',
+  '@remix-run/react',
+  'lit',
 ];
 
 /** Turn an import specifier into a package name ("@scope/pkg/sub@1" -> "@scope/pkg"). */
@@ -161,7 +209,9 @@ const PY_ALIASES: Record<string, string> = {
 
 function pythonDep(name: string): string | null {
   const lower = name.toLowerCase();
-  return PY_ALIASES[lower] ?? PY_ALIASES[lower.split('.').slice(0, 2).join('.')] ?? PY_ALIASES[lower.split('.')[0]!] ?? null;
+  return (
+    PY_ALIASES[lower] ?? PY_ALIASES[lower.split('.').slice(0, 2).join('.')] ?? PY_ALIASES[lower.split('.')[0]!] ?? null
+  );
 }
 
 export class ProjectContext {
@@ -219,8 +269,17 @@ export class ProjectContext {
     this.tracked = this.gitRoot ? gitLsFiles(this.root) : null;
 
     const fullStack = [
-      'next', 'nuxt', '@sveltejs/kit', 'astro', '@remix-run/node', '@remix-run/react',
-      '@react-router/node', '@react-router/serve', '@tanstack/react-start', '@tanstack/start', 'vike',
+      'next',
+      'nuxt',
+      '@sveltejs/kit',
+      'astro',
+      '@remix-run/node',
+      '@remix-run/react',
+      '@react-router/node',
+      '@react-router/serve',
+      '@tanstack/react-start',
+      '@tanstack/start',
+      'vike',
     ];
     this.isSpa = (this.uses('vite') || this.uses('react-scripts')) && !fullStack.some((p) => this.uses(p));
 
@@ -514,13 +573,31 @@ export class ProjectContext {
   /** Short list of the main tools this project uses, for the report header. */
   stack(): string[] {
     const labels: [string, string][] = [
-      ['next', 'Next.js'], ['nuxt', 'Nuxt'], ['@sveltejs/kit', 'SvelteKit'], ['astro', 'Astro'],
-      ['@remix-run/react', 'Remix'], ['vite', 'Vite'], ['react', 'React'], ['vue', 'Vue'], ['svelte', 'Svelte'],
-      ['express', 'Express'], ['hono', 'Hono'], ['fastify', 'Fastify'],
-      ['@supabase/supabase-js', 'Supabase'], ['firebase', 'Firebase'], ['@prisma/client', 'Prisma'],
-      ['drizzle-orm', 'Drizzle'], ['mongoose', 'MongoDB'], ['convex', 'Convex'],
-      ['stripe', 'Stripe'], ['razorpay', 'Razorpay'], ['@clerk/nextjs', 'Clerk'], ['next-auth', 'NextAuth'],
-      ['openai', 'OpenAI'], ['@anthropic-ai/sdk', 'Anthropic'], ['ai', 'Vercel AI SDK'],
+      ['next', 'Next.js'],
+      ['nuxt', 'Nuxt'],
+      ['@sveltejs/kit', 'SvelteKit'],
+      ['astro', 'Astro'],
+      ['@remix-run/react', 'Remix'],
+      ['vite', 'Vite'],
+      ['react', 'React'],
+      ['vue', 'Vue'],
+      ['svelte', 'Svelte'],
+      ['express', 'Express'],
+      ['hono', 'Hono'],
+      ['fastify', 'Fastify'],
+      ['@supabase/supabase-js', 'Supabase'],
+      ['firebase', 'Firebase'],
+      ['@prisma/client', 'Prisma'],
+      ['drizzle-orm', 'Drizzle'],
+      ['mongoose', 'MongoDB'],
+      ['convex', 'Convex'],
+      ['stripe', 'Stripe'],
+      ['razorpay', 'Razorpay'],
+      ['@clerk/nextjs', 'Clerk'],
+      ['next-auth', 'NextAuth'],
+      ['openai', 'OpenAI'],
+      ['@anthropic-ai/sdk', 'Anthropic'],
+      ['ai', 'Vercel AI SDK'],
     ];
     const out: string[] = [];
     for (const [pkg, label] of labels) {
@@ -535,8 +612,9 @@ export class ProjectContext {
 /** Code that only makes sense on a server, even if it sits in a frontend folder. */
 function looksLikeServerCode(content: string): boolean {
   return (
-    /(?:from\s*|require\s*\(\s*)["'](?:node:)?(express|fastify|hono|koa|http|https|fs|child_process|@hono\/node-server)["']/.test(content) ||
-    /\.listen\s*\(\s*(?:\d|port|process\.env)/i.test(content)
+    /(?:from\s*|require\s*\(\s*)["'](?:node:)?(express|fastify|hono|koa|http|https|fs|child_process|@hono\/node-server)["']/.test(
+      content,
+    ) || /\.listen\s*\(\s*(?:\d|port|process\.env)/i.test(content)
   );
 }
 

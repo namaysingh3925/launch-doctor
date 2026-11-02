@@ -65,8 +65,10 @@ test('a server file inside a Vite src/ folder is not treated as browser code', a
   const report = await runDoctor(
     makeProject({
       'package.json': JSON.stringify({ dependencies: { vite: '7', react: '19', express: '5', openai: '5' } }),
-      'src/server.ts': "import express from 'express';\nimport OpenAI from 'openai';\nconst app = express();\napp.listen(3000);\n",
-      'src/backend/routes.ts': "import express from 'express';\nimport OpenAI from 'openai';\nexport const r = express.Router();\n",
+      'src/server.ts':
+        "import express from 'express';\nimport OpenAI from 'openai';\nconst app = express();\napp.listen(3000);\n",
+      'src/backend/routes.ts':
+        "import express from 'express';\nimport OpenAI from 'openai';\nexport const r = express.Router();\n",
     }),
     opts,
   );
@@ -256,7 +258,8 @@ test('app.use(express.json()) with no express.raw is reported at the express.jso
   const report = await runDoctor(
     makeProject({
       ...expressStripe,
-      'server/index.ts': "import express from 'express';\nimport { webhook } from './webhook';\nconst app = express();\napp.use(express.json());\napp.post('/webhook', webhook);\napp.listen(3000);\n",
+      'server/index.ts':
+        "import express from 'express';\nimport { webhook } from './webhook';\nconst app = express();\napp.use(express.json());\napp.post('/webhook', webhook);\napp.listen(3000);\n",
     }),
     opts,
   );
@@ -269,7 +272,8 @@ test('express.raw on the webhook route means the global JSON parser is fine', as
   const report = await runDoctor(
     makeProject({
       ...expressStripe,
-      'server/index.ts': "import express from 'express';\nimport { webhook } from './webhook';\nconst app = express();\napp.post('/webhook', express.raw({ type: 'application/json' }), webhook);\napp.use(express.json());\napp.listen(3000);\n",
+      'server/index.ts':
+        "import express from 'express';\nimport { webhook } from './webhook';\nconst app = express();\napp.post('/webhook', express.raw({ type: 'application/json' }), webhook);\napp.use(express.json());\napp.listen(3000);\n",
     }),
     opts,
   );
@@ -366,7 +370,10 @@ test('an old LAUNCH_FIXES.md is rewritten with "All clear" when nothing is left 
     'LAUNCH_FIXES.md': '# Launch Doctor fixes\n\nOLD PROBLEM THAT WAS FIXED\n',
   });
   const cli = fileURLToPath(new URL('../src/cli.js', import.meta.url));
-  const res = spawnSync(process.execPath, [cli, dir, '--offline'], { encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } });
+  const res = spawnSync(process.execPath, [cli, dir, '--offline'], {
+    encoding: 'utf8',
+    env: { ...process.env, NO_COLOR: '1' },
+  });
   assert.equal(res.status, 0, res.stderr);
   const md = readFileSync(join(dir, 'LAUNCH_FIXES.md'), 'utf8');
   assert.ok(!md.includes('OLD PROBLEM'), 'old content should be gone');
@@ -383,7 +390,10 @@ test('files are still sorted when the file limit is reached', async () => {
   assert.equal(ctx.truncated, true);
   assert.equal(ctx.paths.length, 4);
   assert.deepEqual(ctx.paths, [...ctx.paths].sort());
-  assert.deepEqual(ctx.files.map((f) => f.path), ctx.files.map((f) => f.path).sort((a, b) => a.localeCompare(b)));
+  assert.deepEqual(
+    ctx.files.map((f) => f.path),
+    ctx.files.map((f) => f.path).sort((a, b) => a.localeCompare(b)),
+  );
 });
 
 // ---- Item 10: line numbers from cached line starts match lineAt() ----
@@ -395,7 +405,10 @@ test('find() line numbers match lineAt() for every position', async () => {
   const ctx = new ProjectContext(makeProject({ 'a.js': content }), { useGit: false });
   const file = ctx.files.find((f) => f.path === 'a.js')!;
   for (let i = 0; i <= content.length; i++) assert.equal(ctx.lineOf(file, i), lineAt(content, i), `index ${i}`);
-  assert.deepEqual(ctx.find(/X/).map((m) => m.line), [5, 8, 9]);
+  assert.deepEqual(
+    ctx.find(/X/).map((m) => m.line),
+    [5, 8, 9],
+  );
 });
 
 // ---- Item 11: engines.node matches what the tests and CI need ----
@@ -424,7 +437,11 @@ test('a bare word in .launchdoctorignore that names a folder is treated as a pat
 test('ids in .launchdoctorignore that no check produces are reported', async () => {
   const { renderReport } = await import('../src/report.js');
   const report = await runDoctor(
-    makeProject({ 'package.json': '{}', 'index.js': '', '.launchdoctorignore': 'no-error-tracking\nno-eror-boundary\n' }),
+    makeProject({
+      'package.json': '{}',
+      'index.js': '',
+      '.launchdoctorignore': 'no-error-tracking\nno-eror-boundary\n',
+    }),
     opts,
   );
   assert.deepEqual(report.unknownIgnoreIds, ['no-eror-boundary']);
@@ -470,7 +487,10 @@ test('the demo folder is deleted even if the scan crashes', async () => {
   });
   assert.equal(res.status, 2, `expected a crash exit, got ${res.status}: ${res.stderr}`);
   assert.match(res.stderr, /boom/);
-  assert.deepEqual(readdirSync(tmp).filter((n) => n.startsWith('launch-doctor-demo-')), []);
+  assert.deepEqual(
+    readdirSync(tmp).filter((n) => n.startsWith('launch-doctor-demo-')),
+    [],
+  );
 });
 
 // ---- Item 14: --json and --ci don't write LAUNCH_FIXES.md unless --out is given ----
@@ -537,24 +557,43 @@ test('a domain that does not exist gives one "check the spelling" warning', asyn
   assert.equal(dns.notFound, true);
   const out = { applicable: true, findings: [], passed: [], manual: [] } as import('../src/types.js').CheckOutput;
   applyEmailDns(out, 'mispelled-domain.com', dns, ['Resend']);
-  assert.deepEqual(out.findings.map((f) => f.id), ['email-domain-not-found']);
+  assert.deepEqual(
+    out.findings.map((f) => f.id),
+    ['email-domain-not-found'],
+  );
   assert.match(out.findings[0]!.title, /Domain mispelled-domain\.com was not found in DNS - check the spelling/);
 });
 
 test('missing root SPF is a checklist item for SES, Postmark and SendGrid, a warning otherwise', async () => {
   const { checkEmailDns, applyEmailDns } = await import('../src/checks/email.js');
   const dns = await checkEmailDns('myapp.com', fakeDns({ '_dmarc.myapp.com': ['v=DMARC1; p=none'] }));
-  for (const [provider, expectWarning] of [['Postmark', false], ['Amazon SES', false], ['SendGrid', false], ['Resend', true]] as const) {
+  for (const [provider, expectWarning] of [
+    ['Postmark', false],
+    ['Amazon SES', false],
+    ['SendGrid', false],
+    ['Resend', true],
+  ] as const) {
     const out = { applicable: true, findings: [], passed: [], manual: [] } as import('../src/types.js').CheckOutput;
     applyEmailDns(out, 'myapp.com', dns, [provider]);
-    assert.equal(out.findings.some((f) => f.id === 'email-no-spf'), expectWarning, provider);
-    assert.equal(out.manual.some((m) => m.id === 'email-spf-return-path'), !expectWarning, provider);
+    assert.equal(
+      out.findings.some((f) => f.id === 'email-no-spf'),
+      expectWarning,
+      provider,
+    );
+    assert.equal(
+      out.manual.some((m) => m.id === 'email-spf-return-path'),
+      !expectWarning,
+      provider,
+    );
   }
 });
 
 test('a DKIM record with only the public key (p=...) is recognised', async () => {
   const { checkEmailDns } = await import('../src/checks/email.js');
-  const dns = await checkEmailDns('myapp.com', fakeDns({ 's1._domainkey.myapp.com': ['p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC'] }));
+  const dns = await checkEmailDns(
+    'myapp.com',
+    fakeDns({ 's1._domainkey.myapp.com': ['p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC'] }),
+  );
   assert.equal(dns.dkim, true);
 });
 
@@ -605,7 +644,9 @@ test('a launch-doctor-ignore comment silences one finding at that spot only', as
     }),
     opts,
   );
-  const live = category(report, 'secrets').findings.filter((f) => f.id === 'stripe-live-key').map((f) => f.location?.file);
+  const live = category(report, 'secrets')
+    .findings.filter((f) => f.id === 'stripe-live-key')
+    .map((f) => f.location?.file);
   assert.deepEqual(live, ['server/c.ts'], 'only the file whose comment names a different id is still reported');
   assert.ok(!ids(report).includes('supabase-rls-missing'));
   assert.equal(report.ignored, 6);

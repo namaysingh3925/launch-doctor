@@ -19,7 +19,8 @@ const STRIPE_EVENTS_RE =
   /checkout\.session\.completed|invoice\.paid|invoice\.payment_succeeded|customer\.subscription\.(?:created|updated|deleted)|payment_intent\.succeeded|stripe-signature/i;
 
 const VERIFY_RE = /webhooks\.constructEvent(?:Async)?\s*\(/;
-const READS_BODY = /\b(?:req|request|c\.req)\.(?:text|json|arrayBuffer|body|rawBody|raw|on)\b|\brawBody\b|\bbuffer\s*\(\s*req\b/;
+const READS_BODY =
+  /\b(?:req|request|c\.req)\.(?:text|json|arrayBuffer|body|rawBody|raw|on)\b|\brawBody\b|\bbuffer\s*\(\s*req\b/;
 const SIGNATURE_PASSED = 'Stripe webhooks check the signature, so fake "payment succeeded" messages are rejected';
 
 function parsesJsonFirst(path: string, content: string): boolean {
@@ -71,8 +72,13 @@ export const paymentsCheck: Check = {
   name: 'Payments',
   weight: 3,
   ids: [
-    'stripe-webhook-unverified', 'stripe-webhook-parsed-body', 'stripe-no-webhook', 'razorpay-unverified',
-    'other-provider-webhooks', 'live-test-purchase', 'failed-and-cancelled',
+    'stripe-webhook-unverified',
+    'stripe-webhook-parsed-body',
+    'stripe-no-webhook',
+    'razorpay-unverified',
+    'other-provider-webhooks',
+    'live-test-purchase',
+    'failed-and-cancelled',
   ],
   run(ctx) {
     const server = serverCode(ctx);
@@ -80,7 +86,13 @@ export const paymentsCheck: Check = {
     const stripeClient = ctx.usesAny(['@stripe/stripe-js', '@stripe/react-stripe-js']);
     const stripeLinks = ctx.find(/https:\/\/buy\.stripe\.com\//, appCode, 1).length > 0;
     const razorpay = ctx.uses('razorpay') || ctx.find(/checkout\.razorpay\.com/, appCode, 1).length > 0;
-    const others = [...new Set(Object.entries(OTHER_PROVIDERS).filter(([pkg]) => ctx.uses(pkg)).map(([, name]) => name))];
+    const others = [
+      ...new Set(
+        Object.entries(OTHER_PROVIDERS)
+          .filter(([pkg]) => ctx.uses(pkg))
+          .map(([, name]) => name),
+      ),
+    ];
 
     if (!stripeServer && !stripeClient && !stripeLinks && !razorpay && !others.length) {
       return notApplicable('No payment provider found');
@@ -95,7 +107,9 @@ export const paymentsCheck: Check = {
       // Helpers that wrap constructEvent (e.g. lib/stripe.ts exporting verifyStripeWebhook) count as verification
       // when a route calls them.
       const helperNames = new Set<string>();
-      const helperFiles = uniqueBy(verified, (m) => m.file.path).map((m) => m.file).filter((f) => !isRouteLike(f));
+      const helperFiles = uniqueBy(verified, (m) => m.file.path)
+        .map((m) => m.file)
+        .filter((f) => !isRouteLike(f));
       for (const f of helperFiles) {
         for (const h of ctx.codeOf(f).matchAll(/export\s+(?:async\s+)?function\s+(\w+)|export\s+const\s+(\w+)\s*=/g)) {
           helperNames.add((h[1] ?? h[2])!);
@@ -138,7 +152,7 @@ export const paymentsCheck: Check = {
           id: 'stripe-no-webhook',
           severity: 'warning',
           title: 'No Stripe webhook found',
-          why: "If you unlock features from the \"thank you\" page, customers who close the tab after paying get nothing, and people who cancel or whose card fails keep access. Webhooks tell your server what really happened.",
+          why: 'If you unlock features from the "thank you" page, customers who close the tab after paying get nothing, and people who cancel or whose card fails keep access. Webhooks tell your server what really happened.',
           fixPrompt:
             `My app takes payments with Stripe but has no webhook. Please add a webhook endpoint that: verifies the signature with stripe.webhooks.constructEvent using the raw body and STRIPE_WEBHOOK_SECRET; ` +
             `handles checkout.session.completed (give the customer access), customer.subscription.updated / customer.subscription.deleted (change or remove access) and invoice.payment_failed; ` +
@@ -151,7 +165,12 @@ export const paymentsCheck: Check = {
     if (razorpay) {
       const verified =
         ctx.findCode(/validateWebhookSignature|validatePaymentVerification/, server, 1).length > 0 ||
-        ctx.files.some((f) => server(f) && /razorpay_signature|x-razorpay-signature/i.test(ctx.codeOf(f)) && /createHmac/.test(ctx.codeOf(f)));
+        ctx.files.some(
+          (f) =>
+            server(f) &&
+            /razorpay_signature|x-razorpay-signature/i.test(ctx.codeOf(f)) &&
+            /createHmac/.test(ctx.codeOf(f)),
+        );
       if (verified) {
         out.passed.push('Razorpay payments are verified on the server');
       } else {

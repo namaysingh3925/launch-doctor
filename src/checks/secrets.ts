@@ -25,65 +25,128 @@ function looksRandom(value: string, kind: 'mixed' | 'digits-letters'): boolean {
 
 const KEY_PATTERNS: KeyPattern[] = [
   {
-    id: 'stripe-live-key', name: 'Stripe live secret key', re: /\b[sr]k_live_[0-9a-zA-Z]{20,}/g,
-    severity: 'critical', envName: 'STRIPE_SECRET_KEY', rotate: 'Stripe Dashboard → Developers → API keys → Roll key',
+    id: 'stripe-live-key',
+    name: 'Stripe live secret key',
+    re: /\b[sr]k_live_[0-9a-zA-Z]{20,}/g,
+    severity: 'critical',
+    envName: 'STRIPE_SECRET_KEY',
+    rotate: 'Stripe Dashboard → Developers → API keys → Roll key',
   },
   {
-    id: 'stripe-test-key', name: 'Stripe test secret key', re: /\bsk_test_[0-9a-zA-Z]{20,}/g,
-    severity: 'warning', envName: 'STRIPE_SECRET_KEY', rotate: 'Stripe Dashboard → Developers → API keys → Roll key',
+    id: 'stripe-test-key',
+    name: 'Stripe test secret key',
+    re: /\bsk_test_[0-9a-zA-Z]{20,}/g,
+    severity: 'warning',
+    envName: 'STRIPE_SECRET_KEY',
+    rotate: 'Stripe Dashboard → Developers → API keys → Roll key',
   },
   {
-    id: 'anthropic-key', name: 'Anthropic API key', re: /\bsk-ant-[A-Za-z0-9_-]{20,}/g,
-    severity: 'critical', envName: 'ANTHROPIC_API_KEY', rotate: 'console.anthropic.com → Settings → API keys',
+    id: 'anthropic-key',
+    name: 'Anthropic API key',
+    re: /\bsk-ant-[A-Za-z0-9_-]{20,}/g,
+    severity: 'critical',
+    envName: 'ANTHROPIC_API_KEY',
+    rotate: 'console.anthropic.com → Settings → API keys',
   },
   {
-    id: 'openrouter-key', name: 'OpenRouter API key', re: /\bsk-or-v1-[A-Za-z0-9]{40,}/g,
-    severity: 'critical', envName: 'OPENROUTER_API_KEY', rotate: 'openrouter.ai → Keys', mustLookRandom: 'digits-letters',
+    id: 'openrouter-key',
+    name: 'OpenRouter API key',
+    re: /\bsk-or-v1-[A-Za-z0-9]{40,}/g,
+    severity: 'critical',
+    envName: 'OPENROUTER_API_KEY',
+    rotate: 'openrouter.ai → Keys',
+    mustLookRandom: 'digits-letters',
   },
   {
-    id: 'openai-key', name: 'OpenAI API key', re: /\bsk-(?!ant-|or-v1-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,}/g,
-    severity: 'critical', envName: 'OPENAI_API_KEY', rotate: 'platform.openai.com → API keys', mustLookRandom: 'mixed',
+    id: 'openai-key',
+    name: 'OpenAI API key',
+    re: /\bsk-(?!ant-|or-v1-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,}/g,
+    severity: 'critical',
+    envName: 'OPENAI_API_KEY',
+    rotate: 'platform.openai.com → API keys',
+    mustLookRandom: 'mixed',
   },
   {
-    id: 'supabase-secret-key', name: 'Supabase secret key', re: /\bsb_secret_[A-Za-z0-9_-]{20,}/g,
-    severity: 'critical', envName: 'SUPABASE_SECRET_KEY', rotate: 'Supabase → Project Settings → API Keys',
+    id: 'supabase-secret-key',
+    name: 'Supabase secret key',
+    re: /\bsb_secret_[A-Za-z0-9_-]{20,}/g,
+    severity: 'critical',
+    envName: 'SUPABASE_SECRET_KEY',
+    rotate: 'Supabase → Project Settings → API Keys',
   },
   {
-    id: 'stripe-webhook-secret', name: 'Stripe webhook signing secret', re: /\bwhsec_[A-Za-z0-9]{24,}/g,
-    severity: 'critical', envName: 'STRIPE_WEBHOOK_SECRET', rotate: 'Stripe Dashboard → Developers → Webhooks → Roll secret',
+    id: 'stripe-webhook-secret',
+    name: 'Stripe webhook signing secret',
+    re: /\bwhsec_[A-Za-z0-9]{24,}/g,
+    severity: 'critical',
+    envName: 'STRIPE_WEBHOOK_SECRET',
+    rotate: 'Stripe Dashboard → Developers → Webhooks → Roll secret',
   },
   {
-    id: 'groq-key', name: 'Groq API key', re: /\bgsk_[A-Za-z0-9]{40,}/g,
-    severity: 'critical', envName: 'GROQ_API_KEY', rotate: 'console.groq.com → API Keys',
+    id: 'groq-key',
+    name: 'Groq API key',
+    re: /\bgsk_[A-Za-z0-9]{40,}/g,
+    severity: 'critical',
+    envName: 'GROQ_API_KEY',
+    rotate: 'console.groq.com → API Keys',
   },
   {
-    id: 'huggingface-token', name: 'Hugging Face token', re: /\bhf_[A-Za-z0-9]{30,}/g,
-    severity: 'critical', envName: 'HF_TOKEN', rotate: 'huggingface.co → Settings → Access Tokens', mustLookRandom: 'mixed',
+    id: 'huggingface-token',
+    name: 'Hugging Face token',
+    re: /\bhf_[A-Za-z0-9]{30,}/g,
+    severity: 'critical',
+    envName: 'HF_TOKEN',
+    rotate: 'huggingface.co → Settings → Access Tokens',
+    mustLookRandom: 'mixed',
   },
   {
-    id: 'aws-key', name: 'AWS access key', re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g,
-    severity: 'critical', envName: 'AWS_ACCESS_KEY_ID', rotate: 'AWS Console → IAM → Users → Security credentials',
+    id: 'aws-key',
+    name: 'AWS access key',
+    re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g,
+    severity: 'critical',
+    envName: 'AWS_ACCESS_KEY_ID',
+    rotate: 'AWS Console → IAM → Users → Security credentials',
   },
   {
-    id: 'github-token', name: 'GitHub token', re: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})/g,
-    severity: 'critical', envName: 'GITHUB_TOKEN', rotate: 'github.com → Settings → Developer settings → Personal access tokens',
+    id: 'github-token',
+    name: 'GitHub token',
+    re: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})/g,
+    severity: 'critical',
+    envName: 'GITHUB_TOKEN',
+    rotate: 'github.com → Settings → Developer settings → Personal access tokens',
   },
   {
-    id: 'slack-token', name: 'Slack token', re: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g,
-    severity: 'critical', envName: 'SLACK_TOKEN', rotate: 'api.slack.com → Your apps → OAuth & Permissions',
+    id: 'slack-token',
+    name: 'Slack token',
+    re: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g,
+    severity: 'critical',
+    envName: 'SLACK_TOKEN',
+    rotate: 'api.slack.com → Your apps → OAuth & Permissions',
   },
   {
-    id: 'sendgrid-key', name: 'SendGrid API key', re: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/g,
-    severity: 'critical', envName: 'SENDGRID_API_KEY', rotate: 'SendGrid → Settings → API Keys',
+    id: 'sendgrid-key',
+    name: 'SendGrid API key',
+    re: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/g,
+    severity: 'critical',
+    envName: 'SENDGRID_API_KEY',
+    rotate: 'SendGrid → Settings → API Keys',
   },
   {
-    id: 'resend-key', name: 'Resend API key', re: /\bre_[A-Za-z0-9]{8,}_[A-Za-z0-9]{16,}/g,
-    severity: 'critical', envName: 'RESEND_API_KEY', rotate: 'resend.com → API Keys', mustLookRandom: 'mixed',
+    id: 'resend-key',
+    name: 'Resend API key',
+    re: /\bre_[A-Za-z0-9]{8,}_[A-Za-z0-9]{16,}/g,
+    severity: 'critical',
+    envName: 'RESEND_API_KEY',
+    rotate: 'resend.com → API Keys',
+    mustLookRandom: 'mixed',
   },
   {
-    id: 'private-key', name: 'private key',
+    id: 'private-key',
+    name: 'private key',
     re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----(?:\\n|\s)+[A-Za-z0-9+/=]{40,}/g,
-    severity: 'critical', envName: 'PRIVATE_KEY', rotate: 'wherever this key was created (Google Cloud, Firebase, Apple, etc.)',
+    severity: 'critical',
+    envName: 'PRIVATE_KEY',
+    rotate: 'wherever this key was created (Google Cloud, Firebase, Apple, etc.)',
   },
 ];
 
@@ -110,8 +173,10 @@ export function matchKeys(text: string): KeyMatch[] {
 
 export type { KeyPattern };
 
-const DB_URL_RE = /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|rediss?):\/\/([^:\s'"`/@]+):([^@\s'"`]+)@([^\s'"`/:?,]+)/g;
-const LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|host\.docker\.internal|db|database|postgres|mysql|mongo|mongodb|redis)$/i;
+const DB_URL_RE =
+  /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|rediss?):\/\/([^:\s'"`/@]+):([^@\s'"`]+)@([^\s'"`/:?,]+)/g;
+const LOCAL_HOST_RE =
+  /^(localhost|127\.0\.0\.1|0\.0\.0\.0|host\.docker\.internal|db|database|postgres|mysql|mongo|mongodb|redis)$/i;
 const WEAK_PLACEHOLDER_PW = /^(password|pass|postgres|root|secret|admin|pwd|user|mysql|test)$/i;
 
 const JWT_RE = /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g;
@@ -161,7 +226,12 @@ export const secretsCheck: Check = {
   weight: 3,
   ids: [
     ...KEY_PATTERNS.map((p) => p.id),
-    'database-password', 'supabase-service-role-key', 'public-secret-variable', 'env-committed', 'env-not-ignored', 'separate-keys',
+    'database-password',
+    'supabase-service-role-key',
+    'public-secret-variable',
+    'env-committed',
+    'env-not-ignored',
+    'separate-keys',
     'secret-in-history',
   ],
   run(ctx) {
@@ -241,7 +311,10 @@ export const secretsCheck: Check = {
     // A public variable that actually holds a service_role key
     for (const file of ctx.files.filter((f) => isEnvPath(f.path))) {
       file.content.split(/\r?\n/).forEach((line, i) => {
-        const kv = /^\s*(?:export\s+)?((?:NEXT_PUBLIC_|VITE_|REACT_APP_|EXPO_PUBLIC_|NUXT_PUBLIC_|PUBLIC_)[A-Z0-9_]+)\s*=\s*['"]?([^'"\s#]+)/.exec(line);
+        const kv =
+          /^\s*(?:export\s+)?((?:NEXT_PUBLIC_|VITE_|REACT_APP_|EXPO_PUBLIC_|NUXT_PUBLIC_|PUBLIC_)[A-Z0-9_]+)\s*=\s*['"]?([^'"\s#]+)/.exec(
+            line,
+          );
         if (kv && decodeJwtPayload(kv[2]!)?.role === 'service_role' && !publicHits.has(kv[1]!)) {
           publicHits.set(kv[1]!, { file: file.path, line: i + 1 });
         }

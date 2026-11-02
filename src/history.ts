@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { matchKeys, type KeyPattern } from './checks/secrets.js';
+import { type KeyPattern, matchKeys } from './checks/secrets.js';
 import { gitArgs, isRealEnvPath, type ProjectContext } from './project.js';
 import type { Finding } from './types.js';
 import { mask } from './util.js';
@@ -31,7 +31,14 @@ export async function scanHistory(ctx: ProjectContext, depth = DEFAULT_HISTORY_D
   if (!ctx.gitRoot) return { findings: [], commitsScanned: 0, truncated: false };
 
   const args = gitArgs([
-    'log', '-p', '--all', '--no-color', '-U0', `--max-count=${depth}`, '--pretty=format:commit %H', '--no-ext-diff',
+    'log',
+    '-p',
+    '--all',
+    '--no-color',
+    '-U0',
+    `--max-count=${depth}`,
+    '--pretty=format:commit %H',
+    '--no-ext-diff',
   ]);
   const child = spawn('git', args, { cwd: ctx.root, stdio: ['ignore', 'pipe', 'ignore'] });
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });

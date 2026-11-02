@@ -5,9 +5,24 @@ import { lineTextAt, uniqueBy } from '../util.js';
 import { appCode, at, clientCode, emptyOutput, isRouteLike, notApplicable, serverCode, where } from './common.js';
 
 const AI_PACKAGES = [
-  'openai', '@anthropic-ai/sdk', '@google/generative-ai', '@google/genai', 'ai', '@ai-sdk/', 'groq-sdk',
-  '@mistralai/mistralai', 'replicate', 'cohere-ai', 'together-ai', '@huggingface/inference', 'elevenlabs',
-  '@elevenlabs/elevenlabs-js', '@fal-ai/client', '@langchain/', 'langchain', '@openrouter/ai-sdk-provider',
+  'openai',
+  '@anthropic-ai/sdk',
+  '@google/generative-ai',
+  '@google/genai',
+  'ai',
+  '@ai-sdk/',
+  'groq-sdk',
+  '@mistralai/mistralai',
+  'replicate',
+  'cohere-ai',
+  'together-ai',
+  '@huggingface/inference',
+  'elevenlabs',
+  '@elevenlabs/elevenlabs-js',
+  '@fal-ai/client',
+  '@langchain/',
+  'langchain',
+  '@openrouter/ai-sdk-provider',
 ];
 
 /** SDKs that need a secret key, so they must never run in the browser. */
@@ -21,8 +36,17 @@ const AI_CALL =
   /\.chat\.completions\.create\s*\(|\.responses\.create\s*\(|\.messages\.(?:create|stream)\s*\(|\b(?:generateText|streamText|generateObject|streamObject)\s*\(|\.generateContent(?:Stream)?\s*\(|\.images\.generate\s*\(|\.audio\.speech\.create\s*\(/;
 
 const RATE_LIMIT_PACKAGES = [
-  '@upstash/ratelimit', 'express-rate-limit', 'rate-limiter-flexible', '@arcjet/', '@unkey/ratelimit',
-  'hono-rate-limiter', '@nestjs/throttler', 'next-rate-limit', 'limiter', '@fastify/rate-limit', 'koa-ratelimit',
+  '@upstash/ratelimit',
+  'express-rate-limit',
+  'rate-limiter-flexible',
+  '@arcjet/',
+  '@unkey/ratelimit',
+  'hono-rate-limiter',
+  '@nestjs/throttler',
+  'next-rate-limit',
+  'limiter',
+  '@fastify/rate-limit',
+  'koa-ratelimit',
 ];
 
 const RATE_LIMIT_USAGE =
@@ -91,11 +115,7 @@ export const costsCheck: Check = {
       .find(BROWSER_FORBIDDEN_IMPORT, client)
       .filter((m) => !/^\s*(?:import|export)\s+type\b/.test(lineTextAt(m.file.content, m.index)));
     const browserHits = uniqueBy(
-      [
-        ...realImports,
-        ...ctx.find(AI_DIRECT_URL, client),
-        ...ctx.find(/dangerouslyAllowBrowser\s*:\s*true/, appCode),
-      ],
+      [...realImports, ...ctx.find(AI_DIRECT_URL, client), ...ctx.find(/dangerouslyAllowBrowser\s*:\s*true/, appCode)],
       (m) => m.file.path,
     );
     for (const m of browserHits.slice(0, 3)) {

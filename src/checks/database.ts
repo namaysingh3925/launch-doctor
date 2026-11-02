@@ -6,9 +6,7 @@ import { emptyOutput, notApplicable, where } from './common.js';
 
 /** Remove SQL comments but keep line numbers the same. */
 function stripSqlComments(sql: string): string {
-  return sql
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-    .replace(/--[^\n]*/g, '');
+  return sql.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/--[^\n]*/g, '');
 }
 
 interface TableInfo {
@@ -91,8 +89,16 @@ export const databaseCheck: Check = {
   name: 'Database & backups',
   weight: 3,
   ids: [
-    'supabase-rls-missing', 'supabase-open-policy', 'supabase-signed-in-write-policy', 'supabase-public-read',
-    'supabase-rls-dashboard', 'firebase-open-rules', 'firebase-rules-console', 'sqlite-on-serverless', 'prisma-db-push', 'backups',
+    'supabase-rls-missing',
+    'supabase-open-policy',
+    'supabase-signed-in-write-policy',
+    'supabase-public-read',
+    'supabase-rls-dashboard',
+    'firebase-open-rules',
+    'firebase-rules-console',
+    'sqlite-on-serverless',
+    'prisma-db-push',
+    'backups',
   ],
   run(ctx) {
     const dbs = detectDatabase(ctx);
@@ -118,7 +124,7 @@ export const databaseCheck: Check = {
           id: 'supabase-rls-missing',
           severity: 'critical',
           title: `${plural(missing.length, 'Supabase table')} without Row Level Security: ${names.join(', ')}${more}`,
-          why: "Your Supabase public (anon) key is inside your website, which is normal. But without Row Level Security, anyone holding that key can read, change or delete every row in these tables.",
+          why: 'Your Supabase public (anon) key is inside your website, which is normal. But without Row Level Security, anyone holding that key can read, change or delete every row in these tables.',
           location: missing[0]!.loc,
           fixPrompt:
             `These Supabase tables don't have Row Level Security enabled: ${missing.map((t) => t.name).join(', ')}. ` +
@@ -165,7 +171,9 @@ export const databaseCheck: Check = {
 
     // ---- Firebase security rules ----
     if (dbs.includes('Firebase')) {
-      const ruleFiles = ctx.files.filter((f) => /(^|\/)(firestore|storage)\.rules$|(^|\/)database\.rules\.json$|\.rules$/.test(f.path));
+      const ruleFiles = ctx.files.filter((f) =>
+        /(^|\/)(firestore|storage)\.rules$|(^|\/)database\.rules\.json$|\.rules$/.test(f.path),
+      );
       let openFound = false;
       for (const f of ruleFiles) {
         const testMode = /request\.time\s*<\s*timestamp\.date\s*\(/.exec(f.content);
@@ -214,7 +222,7 @@ export const databaseCheck: Check = {
         id: 'sqlite-on-serverless',
         severity: 'warning',
         title: 'Your database is a file on disk (SQLite)',
-        why: 'That works on your laptop, but hosts like Vercel and Netlify don\'t keep files between requests, so saved data disappears or writes fail once you deploy. Use a hosted database, or a server with a permanent disk.',
+        why: "That works on your laptop, but hosts like Vercel and Netlify don't keep files between requests, so saved data disappears or writes fail once you deploy. Use a hosted database, or a server with a permanent disk.",
         location: loc,
         fixPrompt:
           `My app uses SQLite (a database stored in a file)${loc ? ` — see ${where(loc)}` : ''}, and I want to deploy it to serverless hosting like Vercel. ` +

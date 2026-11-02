@@ -77,7 +77,19 @@ test('--history finds keys that were removed from the code but are still in git'
   const dir = makeProject({ 'package.json': '{"name":"hist"}', 'index.js': 'console.log(1)\n' });
   const commit = (msg: string) => {
     git(dir, 'add', '-A');
-    git(dir, '-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', msg);
+    git(
+      dir,
+      '-c',
+      'user.name=t',
+      '-c',
+      'user.email=t@example.com',
+      '-c',
+      'commit.gpgsign=false',
+      'commit',
+      '-q',
+      '-m',
+      msg,
+    );
   };
   git(dir, 'init', '-q');
   commit('start');
@@ -86,13 +98,19 @@ test('--history finds keys that were removed from the code but are still in git'
   commit('add keys');
   unlinkSync(join(dir, 'config.js'));
   commit('remove key');
-  const added = execFileSync('git', ['log', '--format=%h', '-n', '1', '--skip', '1'], { cwd: dir, encoding: 'utf8' }).trim();
+  const added = execFileSync('git', ['log', '--format=%h', '-n', '1', '--skip', '1'], {
+    cwd: dir,
+    encoding: 'utf8',
+  }).trim();
 
   const report = await runDoctor(dir, { offline: true, history: { depth: 500 } });
   const hist = category(report, 'secrets').findings.filter((f) => f.id === 'secret-in-history');
   assert.equal(hist.length, 1, 'only the removed key; the one still in other.js is reported by the normal scan');
   assert.equal(hist[0]!.severity, 'critical');
-  assert.equal(hist[0]!.title, `Secret still in git history: Stripe live secret key (commit ${added.slice(0, 7)}, config.js)`);
+  assert.equal(
+    hist[0]!.title,
+    `Secret still in git history: Stripe live secret key (commit ${added.slice(0, 7)}, config.js)`,
+  );
   assert.ok(!JSON.stringify(report).includes(key), 'the key must be masked');
   assert.match(hist[0]!.fixPrompt, /filter-repo/);
 

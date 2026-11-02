@@ -9,9 +9,9 @@ import { paymentsCheck } from './checks/payments.js';
 import { secretsCheck } from './checks/secrets.js';
 import { overall, scoreCategory, toGrade } from './grade.js';
 import { scanHistory } from './history.js';
-import { plural } from './util.js';
 import { ProjectContext } from './project.js';
 import type { CategoryResult, Check, CheckOutput, Finding, Options, Report } from './types.js';
+import { plural } from './util.js';
 import { version } from './version.js';
 
 function notRun(note: string): CheckOutput {
@@ -52,7 +52,8 @@ export const CATEGORY_IDS = (): string[] => CHECKS.map((c) => c.id);
 
 export async function runDoctor(root: string, options: Options = {}): Promise<Report> {
   const unknown = [...(options.only ?? []), ...(options.skip ?? [])].filter((id) => !CATEGORY_IDS().includes(id));
-  if (unknown.length) throw new Error(`Unknown category: ${unknown.join(', ')}. Use one of: ${CATEGORY_IDS().join(', ')}`);
+  if (unknown.length)
+    throw new Error(`Unknown category: ${unknown.join(', ')}. Use one of: ${CATEGORY_IDS().join(', ')}`);
   const ctx = new ProjectContext(root, options);
   const categories: CategoryResult[] = [];
   let ignored = 0;
@@ -85,7 +86,9 @@ export async function runDoctor(root: string, options: Options = {}): Promise<Re
         const history = await scanHistory(ctx, options.history.depth);
         out.findings.push(...history.findings);
         if (!history.findings.length) {
-          out.passed.push(`No removed keys found in the last ${plural(history.commitsScanned, 'commit')} of git history`);
+          out.passed.push(
+            `No removed keys found in the last ${plural(history.commitsScanned, 'commit')} of git history`,
+          );
         }
         if (history.truncated) out.passed.push('Git history scan stopped early because the history is very large');
       }
@@ -143,7 +146,7 @@ export async function runDoctor(root: string, options: Options = {}): Promise<Re
   return report;
 }
 
+export { renderFixes } from './fixes.js';
 export { ProjectContext } from './project.js';
 export { renderReport } from './report.js';
-export { renderFixes } from './fixes.js';
 export type * from './types.js';

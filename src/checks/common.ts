@@ -1,6 +1,7 @@
 import { isCodeFile, isTestPath, type Match, type ProjectContext, type SourceFile } from '../project.js';
 
 export { isRouteLike } from '../project.js';
+
 import type { CheckOutput, Location } from '../types.js';
 
 export function emptyOutput(): CheckOutput {

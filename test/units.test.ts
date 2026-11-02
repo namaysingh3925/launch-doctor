@@ -64,7 +64,13 @@ test('line numbers', () => {
 });
 
 function cat(id: string, weight: number, findings: Finding['severity'][]): CategoryResult {
-  const fs: Finding[] = findings.map((severity, i) => ({ id: `${id}-${i}`, severity, title: '', why: '', fixPrompt: '' }));
+  const fs: Finding[] = findings.map((severity, i) => ({
+    id: `${id}-${i}`,
+    severity,
+    title: '',
+    why: '',
+    fixPrompt: '',
+  }));
   const out = { applicable: true, findings: fs, passed: [], manual: [] };
   const score = scoreCategory(out);
   return { ...out, id, name: id, weight, score, grade: toGrade(score) };

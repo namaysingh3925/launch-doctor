@@ -2,13 +2,31 @@ import type { Check } from '../types.js';
 import { appCode, emptyOutput, notApplicable } from './common.js';
 
 const TRACKERS: [string, string][] = [
-  ['@sentry/', 'Sentry'], ['posthog-js', 'PostHog'], ['posthog-node', 'PostHog'], ['@bugsnag/', 'Bugsnag'],
-  ['logrocket', 'LogRocket'], ['@highlight-run/', 'Highlight'], ['highlight.run', 'Highlight'],
-  ['@datadog/browser-rum', 'Datadog'], ['@datadog/browser-logs', 'Datadog'], ['dd-trace', 'Datadog'],
-  ['rollbar', 'Rollbar'], ['@rollbar/', 'Rollbar'], ['@honeybadger-io/', 'Honeybadger'], ['@axiomhq/', 'Axiom'],
-  ['@logtail/', 'Better Stack'], ['@betterstack/', 'Better Stack'], ['@baselime/', 'Baselime'], ['trackjs', 'TrackJS'],
-  ['raygun4js', 'Raygun'], ['@appsignal/', 'AppSignal'], ['newrelic', 'New Relic'], ['@newrelic/', 'New Relic'],
-  ['@vercel/otel', 'OpenTelemetry'], ['@opentelemetry/sdk-node', 'OpenTelemetry'], ['elastic-apm-node', 'Elastic APM'],
+  ['@sentry/', 'Sentry'],
+  ['posthog-js', 'PostHog'],
+  ['posthog-node', 'PostHog'],
+  ['@bugsnag/', 'Bugsnag'],
+  ['logrocket', 'LogRocket'],
+  ['@highlight-run/', 'Highlight'],
+  ['highlight.run', 'Highlight'],
+  ['@datadog/browser-rum', 'Datadog'],
+  ['@datadog/browser-logs', 'Datadog'],
+  ['dd-trace', 'Datadog'],
+  ['rollbar', 'Rollbar'],
+  ['@rollbar/', 'Rollbar'],
+  ['@honeybadger-io/', 'Honeybadger'],
+  ['@axiomhq/', 'Axiom'],
+  ['@logtail/', 'Better Stack'],
+  ['@betterstack/', 'Better Stack'],
+  ['@baselime/', 'Baselime'],
+  ['trackjs', 'TrackJS'],
+  ['raygun4js', 'Raygun'],
+  ['@appsignal/', 'AppSignal'],
+  ['newrelic', 'New Relic'],
+  ['@newrelic/', 'New Relic'],
+  ['@vercel/otel', 'OpenTelemetry'],
+  ['@opentelemetry/sdk-node', 'OpenTelemetry'],
+  ['elastic-apm-node', 'Elastic APM'],
 ];
 
 export const monitoringCheck: Check = {
@@ -56,9 +74,10 @@ export const monitoringCheck: Check = {
           severity: 'warning',
           title: 'No friendly error screen',
           why: 'If one part of a React app crashes, the whole page goes blank white. An error screen shows "Something went wrong — try again" and keeps the rest of the app usable.',
-          fixPrompt: nextAppRouter || ctx.uses('next')
-            ? 'Add error pages to my Next.js app: an app/error.tsx with a friendly "Something went wrong" message and a "Try again" button that calls reset(), plus an app/global-error.tsx for crashes in the root layout. Send the error to my error tracker if I have one.'
-            : 'Add a React error boundary to my app (the react-error-boundary package is fine) around the main routes, showing a friendly "Something went wrong" message with a "Try again" button instead of a blank page. Send the error to my error tracker if I have one.',
+          fixPrompt:
+            nextAppRouter || ctx.uses('next')
+              ? 'Add error pages to my Next.js app: an app/error.tsx with a friendly "Something went wrong" message and a "Try again" button that calls reset(), plus an app/global-error.tsx for crashes in the root layout. Send the error to my error tracker if I have one.'
+              : 'Add a React error boundary to my app (the react-error-boundary package is fine) around the main routes, showing a friendly "Something went wrong" message with a "Try again" button instead of a blank page. Send the error to my error tracker if I have one.',
         });
       }
     }

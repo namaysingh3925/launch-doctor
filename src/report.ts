@@ -1,8 +1,9 @@
+import { shortWhere } from './checks/common.js';
 import type { CategoryResult, Finding, Grade, Report } from './types.js';
 import { plural } from './util.js';
-import { shortWhere } from './checks/common.js';
 
-const useColor = !process.env.NO_COLOR && (process.env.FORCE_COLOR ? process.env.FORCE_COLOR !== '0' : !!process.stdout.isTTY);
+const useColor =
+  !process.env.NO_COLOR && (process.env.FORCE_COLOR ? process.env.FORCE_COLOR !== '0' : !!process.stdout.isTTY);
 const paint = (code: string) => (s: string) => (useColor ? `\x1b[${code}m${s}\x1b[0m` : s);
 
 export const bold = paint('1');
@@ -97,7 +98,10 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
     for (const f of warnings) lines.push(...findingBlock(f, width));
   }
   if (existing) {
-    lines.push(`  ${dim(`${plural(existing, 'existing issue')} (baseline) not shown. Use --no-baseline to list them.`)}`, '');
+    lines.push(
+      `  ${dim(`${plural(existing, 'existing issue')} (baseline) not shown. Use --no-baseline to list them.`)}`,
+      '',
+    );
   }
 
   const passed = report.categories.flatMap((c) => c.passed);
@@ -118,7 +122,10 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
   }
 
   if (report.ignored) {
-    lines.push(`  ${dim(`${plural(report.ignored, 'item')} hidden by .launchdoctorignore or launch-doctor-ignore comments`)}`, '');
+    lines.push(
+      `  ${dim(`${plural(report.ignored, 'item')} hidden by .launchdoctorignore or launch-doctor-ignore comments`)}`,
+      '',
+    );
   }
   if (report.unknownIgnoreIds.length) {
     for (const id of report.unknownIgnoreIds) {
@@ -129,7 +136,9 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
 
   if (opts.fixFile) {
     lines.push(`  ${bold('Fix prompts saved to')} ${cyan(opts.fixFile)}`);
-    lines.push(`  ${dim('Paste them one at a time into Claude Code, Cursor, Lovable or Bolt, then run launch-doctor again.')}`);
+    lines.push(
+      `  ${dim('Paste them one at a time into Claude Code, Cursor, Lovable or Bolt, then run launch-doctor again.')}`,
+    );
     lines.push('');
   }
 

@@ -6,14 +6,50 @@ import { mostCommon } from '../util.js';
 import { appCode, at, emptyOutput, notApplicable } from './common.js';
 
 const IGNORED_DOMAINS = new Set([
-  'resend.dev', 'example.com', 'example.org', 'example.net', 'gmail.com', 'googlemail.com', 'yahoo.com',
-  'outlook.com', 'hotmail.com', 'icloud.com', 'test.com', 'yourdomain.com', 'domain.com', 'mydomain.com',
-  'acme.com', 'company.com', 'email.com', 'mail.com', 'localhost', 'sendgrid.net', 'users.noreply.github.com',
+  'resend.dev',
+  'example.com',
+  'example.org',
+  'example.net',
+  'gmail.com',
+  'googlemail.com',
+  'yahoo.com',
+  'outlook.com',
+  'hotmail.com',
+  'icloud.com',
+  'test.com',
+  'yourdomain.com',
+  'domain.com',
+  'mydomain.com',
+  'acme.com',
+  'company.com',
+  'email.com',
+  'mail.com',
+  'localhost',
+  'sendgrid.net',
+  'users.noreply.github.com',
 ]);
 
 const DKIM_SELECTORS = [
-  'resend', 'google', 'default', 's1', 's2', 'k1', 'k2', 'k3', 'selector1', 'selector2',
-  'mail', 'dkim', 'smtp', 'mailjet', 'mandrill', 'zoho', 'mxvault', 'sig1', 'pm', 'brevo1',
+  'resend',
+  'google',
+  'default',
+  's1',
+  's2',
+  'k1',
+  'k2',
+  'k3',
+  'selector1',
+  'selector2',
+  'mail',
+  'dkim',
+  'smtp',
+  'mailjet',
+  'mandrill',
+  'zoho',
+  'mxvault',
+  'sig1',
+  'pm',
+  'brevo1',
 ];
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})/;
@@ -31,7 +67,10 @@ function collectSenders(ctx: ProjectContext): Sender[] {
     if (e) out.push({ email: e[0], domain: e[1]!.toLowerCase(), match: m });
   };
   for (const m of ctx.find(/\bfrom\s*:\s*[`'"]([^`'"\n]{3,120})[`'"]/, appCode)) add(m, m.match[1]!);
-  for (const m of ctx.find(/^[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:FROM|SENDER)[A-Z0-9_]*[ \t]*=[ \t]*['"]?([^\n'"#]+)/m, (f) => isEnvPath(f.path))) {
+  for (const m of ctx.find(
+    /^[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:FROM|SENDER)[A-Z0-9_]*[ \t]*=[ \t]*['"]?([^\n'"#]+)/m,
+    (f) => isEnvPath(f.path),
+  )) {
     add(m, m.match[1]!);
   }
   return out;
@@ -65,7 +104,10 @@ export interface DnsLike {
   resolveTxt(name: string): Promise<string[][]>;
 }
 
-export async function checkEmailDns(domain: string, resolver: DnsLike = new Resolver({ timeout: 3000, tries: 2 })): Promise<EmailDnsResult> {
+export async function checkEmailDns(
+  domain: string,
+  resolver: DnsLike = new Resolver({ timeout: 3000, tries: 2 }),
+): Promise<EmailDnsResult> {
   // Does the domain exist at all? A typo should give one clear message, not three missing records.
   try {
     await resolver.resolveNs(domain);
@@ -161,8 +203,16 @@ export const emailCheck: Check = {
   name: 'Email delivery',
   weight: 1,
   ids: [
-    'email-test-sender', 'email-personal-gmail', 'email-domain-not-found', 'email-no-spf', 'email-spf-return-path',
-    'email-no-dmarc', 'email-dkim', 'email-dns', 'supabase-smtp', 'email-real-inbox',
+    'email-test-sender',
+    'email-personal-gmail',
+    'email-domain-not-found',
+    'email-no-spf',
+    'email-spf-return-path',
+    'email-no-dmarc',
+    'email-dkim',
+    'email-dns',
+    'supabase-smtp',
+    'email-real-inbox',
   ],
   async run(ctx) {
     const providers = detectEmailProviders(ctx);
@@ -230,7 +280,7 @@ export const emailCheck: Check = {
     out.manual.push({
       id: 'email-real-inbox',
       title: 'Send yourself every email from the live app',
-      how: 'Sign up, reset your password and trigger every notification using a real Gmail and Outlook address. Check they arrive, aren\'t in spam, and the links work.',
+      how: "Sign up, reset your password and trigger every notification using a real Gmail and Outlook address. Check they arrive, aren't in spam, and the links work.",
     });
 
     return out;

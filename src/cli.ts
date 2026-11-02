@@ -4,10 +4,10 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { applyBaseline, BASELINE_FILE, loadBaseline, writeBaseline } from './baseline.js';
 import { createDemoProject } from './demo.js';
 import { renderFixes } from './fixes.js';
-import { DEFAULT_HISTORY_DEPTH } from './history.js';
-import { runInit } from './init.js';
 import { failingFindings } from './grade.js';
+import { DEFAULT_HISTORY_DEPTH } from './history.js';
 import { CATEGORY_IDS, runDoctor } from './index.js';
+import { runInit } from './init.js';
 import { bold, dim, renderReport } from './report.js';
 import { renderSarif } from './sarif.js';
 import { renderStepSummary } from './summary.js';
@@ -79,8 +79,18 @@ interface Args {
 
 function parseArgs(argv: string[]): Args {
   const args: Args = {
-    writeFile: true, json: false, offline: false, ci: false, failOn: 'critical', updateBaseline: false, baseline: true,
-    history: false, historyDepth: DEFAULT_HISTORY_DEPTH, demo: false, help: false, version: false,
+    writeFile: true,
+    json: false,
+    offline: false,
+    ci: false,
+    failOn: 'critical',
+    updateBaseline: false,
+    baseline: true,
+    history: false,
+    historyDepth: DEFAULT_HISTORY_DEPTH,
+    demo: false,
+    help: false,
+    version: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
@@ -123,7 +133,10 @@ function parseArgs(argv: string[]): Args {
 }
 
 function categoriesArg(flag: string, input: string): string[] {
-  const ids = input.split(',').map((s) => s.trim()).filter(Boolean);
+  const ids = input
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const unknown = ids.filter((id) => !CATEGORY_IDS().includes(id));
   if (!ids.length || unknown.length) {
     fail(`${flag}: unknown category "${unknown.join('", "') || input}". Use: ${CATEGORY_IDS().join(', ')}`);
@@ -133,7 +146,8 @@ function categoriesArg(flag: string, input: string): string[] {
 
 function depthArg(input: string): number {
   const n = Number(input);
-  if (!Number.isInteger(n) || n < 1) fail(`--history-depth must be a whole number of commits (1 or more), not "${input}"`);
+  if (!Number.isInteger(n) || n < 1)
+    fail(`--history-depth must be a whole number of commits (1 or more), not "${input}"`);
   return n;
 }
 
@@ -144,7 +158,12 @@ function severityArg(input: string): Severity {
 
 /** "https://www.MyApp.com/pricing" -> "myapp.com" */
 function cleanDomain(input: string): string {
-  const domain = input.trim().replace(/^https?:\/\//i, '').replace(/[/?#].*$/, '').replace(/^www\./i, '').toLowerCase();
+  const domain = input
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/[/?#].*$/, '')
+    .replace(/^www\./i, '')
+    .toLowerCase();
   if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain)) fail(`"${input}" doesn't look like a domain (example: myapp.com)`);
   return domain;
 }
@@ -182,7 +201,8 @@ async function main(): Promise<void> {
     args.path = createDemoProject();
     args.offline = true;
     if (!args.out) args.writeFile = false;
-    if (!args.json) process.stdout.write(`\n  ${dim('Demo: scanning a sample app with the usual weekend-project mistakes…')}\n`);
+    if (!args.json)
+      process.stdout.write(`\n  ${dim('Demo: scanning a sample app with the usual weekend-project mistakes…')}\n`);
   }
 
   const root = resolve(args.path ?? '.');
@@ -218,7 +238,11 @@ async function main(): Promise<void> {
 
   let fixFile: string | undefined;
   const hasSomething = report.counts.critical + report.counts.warning + report.counts.manual > 0;
-  const target = args.out ? (isAbsolute(args.out) ? args.out : resolve(process.cwd(), args.out)) : join(root, 'LAUNCH_FIXES.md');
+  const target = args.out
+    ? isAbsolute(args.out)
+      ? args.out
+      : resolve(process.cwd(), args.out)
+    : join(root, 'LAUNCH_FIXES.md');
   // Rewrite an existing file even when everything passes, so old problems don't linger in it.
   if (args.writeFile && (hasSomething || existsSync(target))) {
     try {
@@ -232,7 +256,9 @@ async function main(): Promise<void> {
 
   if (args.sarif) {
     const sarifPath = isAbsolute(args.sarif) ? args.sarif : resolve(process.cwd(), args.sarif);
-    const fallbackUri = ['package.json', 'pyproject.toml', 'requirements.txt', 'README.md'].find((f) => existsSync(join(root, f)));
+    const fallbackUri = ['package.json', 'pyproject.toml', 'requirements.txt', 'README.md'].find((f) =>
+      existsSync(join(root, f)),
+    );
     try {
       writeFileSync(sarifPath, renderSarif(report, { fallbackUri }));
     } catch (err) {

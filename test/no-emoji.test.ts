@@ -25,7 +25,10 @@ test('the demo report has no emojis in terminal, LAUNCH_FIXES.md or JSON output'
 
 test('--help has no emojis', () => {
   const cli = fileURLToPath(new URL('../src/cli.js', import.meta.url));
-  const res = spawnSync(process.execPath, [cli, '--help'], { encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } });
+  const res = spawnSync(process.execPath, [cli, '--help'], {
+    encoding: 'utf8',
+    env: { ...process.env, NO_COLOR: '1' },
+  });
   assertNoEmoji('--help', res.stdout);
 });
 

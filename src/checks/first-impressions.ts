@@ -12,20 +12,41 @@ const CONFIG_OR_SCRIPT =
   /(^|\/)(vite|next|nuxt|svelte|astro|playwright|vitest|jest|webpack|tailwind|postcss|eslint|tsup|rollup)\.config\.|(^|\/)(scripts|tools|seed|e2e)\/|(^|\/)seed\.|\.md$/i;
 
 const htmlOrLayout = (f: SourceFile) =>
-  appCode(f) && (/\.html?$/i.test(f.path) || /(^|\/)(app\/layout|_document|_app|app\.html|\+layout|nuxt\.config|layouts?\/)/i.test(f.path) || /index\.html$/.test(f.path));
+  appCode(f) &&
+  (/\.html?$/i.test(f.path) ||
+    /(^|\/)(app\/layout|_document|_app|app\.html|\+layout|nuxt\.config|layouts?\/)/i.test(f.path) ||
+    /index\.html$/.test(f.path));
 
 export const firstImpressionsCheck: Check = {
   id: 'first-impressions',
   name: 'First impressions',
   weight: 1,
   ids: [
-    'default-title', 'lovable-default-meta', 'default-favicon', 'no-description', 'no-social-preview', 'hardcoded-localhost',
-    'not-found-page', 'robots-sitemap', 'phone-test',
+    'default-title',
+    'lovable-default-meta',
+    'default-favicon',
+    'no-description',
+    'no-social-preview',
+    'hardcoded-localhost',
+    'not-found-page',
+    'robots-sitemap',
+    'phone-test',
   ],
   run(ctx) {
     const frontend =
       ctx.files.some((f) => /\.html?$/i.test(f.path) && !/(^|\/)(docs|coverage)\//.test(f.path)) ||
-      ctx.usesAny(['react', 'vue', 'svelte', 'next', 'nuxt', 'astro', '@sveltejs/kit', 'solid-js', 'preact', '@angular/core']);
+      ctx.usesAny([
+        'react',
+        'vue',
+        'svelte',
+        'next',
+        'nuxt',
+        'astro',
+        '@sveltejs/kit',
+        'solid-js',
+        'preact',
+        '@angular/core',
+      ]);
     if (!ctx.isWebApp) return notApplicable('Not a web app');
     if (!frontend) return notApplicable('No website frontend found');
     const out = emptyOutput();
@@ -38,9 +59,7 @@ export const firstImpressionsCheck: Check = {
       out.findings.push({
         id: 'default-title',
         severity: 'warning',
-        title: isDescription
-          ? `Your page description still says "${shown}"`
-          : `Your browser tab still says "${shown}"`,
+        title: isDescription ? `Your page description still says "${shown}"` : `Your browser tab still says "${shown}"`,
         why: isDescription
           ? "That's the starter template's description. Google shows it under your link in search results and shared links, and it makes the app look unfinished."
           : "That's the starter template's title. It shows in browser tabs, Google results and shared links, and makes the app look unfinished.",
@@ -67,15 +86,20 @@ export const firstImpressionsCheck: Check = {
         id: 'default-favicon',
         severity: 'warning',
         title: 'Your site icon is still the Vite logo',
-        why: 'The little icon in the browser tab and bookmarks is the template\'s, not yours.',
+        why: "The little icon in the browser tab and bookmarks is the template's, not yours.",
         location: at(viteFavicon),
-        fixPrompt: 'My app still uses the default vite.svg favicon. Help me add my own favicon (and an apple-touch-icon) and update index.html to use them.',
+        fixPrompt:
+          'My app still uses the default vite.svg favicon. Help me add my own favicon (and an apple-touch-icon) and update index.html to use them.',
       });
     }
 
     // Description & social preview
     const hasDescription =
-      ctx.find(/<meta[^>]+name=["']description["']|\bdescription\s*:\s*["'`][^"'`]{10,}|generateMetadata/i, htmlOrLayout, 1).length > 0 ||
+      ctx.find(
+        /<meta[^>]+name=["']description["']|\bdescription\s*:\s*["'`][^"'`]{10,}|generateMetadata/i,
+        htmlOrLayout,
+        1,
+      ).length > 0 ||
       ctx.find(/<meta[^>]+name=["']description["']|\bdescription\s*:\s*["'`][^"'`]{10,}/i, appCode, 1).length > 0;
     if (!hasDescription) {
       out.findings.push({
@@ -83,7 +107,8 @@ export const firstImpressionsCheck: Check = {
         severity: 'warning',
         title: 'No page description',
         why: 'Google shows the description under your link in search results. Without one it picks random text from the page.',
-        fixPrompt: "Add a meta description to my app (one or two sentences on what it does and who it's for) in the main layout / index.html, and per-page descriptions for the main pages.",
+        fixPrompt:
+          "Add a meta description to my app (one or two sentences on what it does and who it's for) in the main layout / index.html, and per-page descriptions for the main pages.",
       });
     }
 
@@ -97,7 +122,8 @@ export const firstImpressionsCheck: Check = {
         severity: 'warning',
         title: 'No preview image when your link is shared',
         why: 'When someone shares your link on WhatsApp, X or LinkedIn, it shows an empty card instead of an image and title, so fewer people click.',
-        fixPrompt: 'Add Open Graph and Twitter card tags to my app (title, description, and a 1200×630 preview image) so shared links show a nice preview card. Tell me how to test it with a link-preview checker.',
+        fixPrompt:
+          'Add Open Graph and Twitter card tags to my app (title, description, and a 1200×630 preview image) so shared links show a nice preview card. Tell me how to test it with a link-preview checker.',
       });
     }
 
@@ -138,7 +164,9 @@ export const firstImpressionsCheck: Check = {
     }
 
     const hasRobots = ctx.hasPath(/(^|\/)(public\/|static\/)?robots\.txt$|(^|\/)app\/robots\.(t|j)sx?$/);
-    const hasSitemap = ctx.hasPath(/(^|\/)(public\/|static\/)?sitemap.*\.xml$|(^|\/)app\/sitemap\.(t|j)sx?$/) || ctx.uses('next-sitemap');
+    const hasSitemap =
+      ctx.hasPath(/(^|\/)(public\/|static\/)?sitemap.*\.xml$|(^|\/)app\/sitemap\.(t|j)sx?$/) ||
+      ctx.uses('next-sitemap');
     if (hasRobots && hasSitemap) out.passed.push('Has robots.txt and a sitemap for Google');
     else {
       out.manual.push({
