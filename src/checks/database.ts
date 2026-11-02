@@ -19,7 +19,7 @@ interface TableInfo {
 function analyzeSupabaseSql(files: SourceFile[]) {
   const created = new Map<string, TableInfo>();
   const rls = new Set<string>();
-  const openPolicies: { name: string; table: string; loc: Location }[] = [];
+  const policies: PolicyInfo[] = [];
 
   for (const file of files) {
     const sql = stripSqlComments(file.content);
@@ -48,11 +48,24 @@ function analyzeSupabaseSql(files: SourceFile[]) {
     const policyRe = /create\s+policy\s+("([^"]+)"|(\w+))\s+on\s+(?:"?\w+"?\s*\.\s*)?"?(\w+)"?([\s\S]*?);/gi;
     while ((m = policyRe.exec(sql))) {
       const body = m[5] ?? '';
-      const writes = /\bfor\s+(all|insert|update|delete)\b/i.test(body) || !/\bfor\s+select\b/i.test(body);
       const open = /(?:using|with\s+check)\s*\(\s*true\s*\)/i.test(body);
-      const anyone = !/\bto\s+(service_role|authenticated)\b/i.test(body);
-      if (writes && open && anyone) {
-        openPolicies.push({
+      if (!open) continue;
+      // No "to ..." clause means the policy applies to everyone (public).
+      const rolesMatch = /\bto\s+((?:"?\w+"?\s*,\s*)*"?\w+"?)/i.exec(body);
+      const roles = rolesMatch ? rolesMatch[1]!.split(',').map((r) => r.replace(/"/g, '').trim().toLowerCase()) : [];
+      if (roles.length && roles.every((r) => r === 'service_role')) continue;
+      const toEveryone = !roles.length || roles.some((r) => r === 'anon' || r === 'public');
+      const toSignedIn = roles.includes('authenticated');
+      // No "for ..." clause means FOR ALL, which includes writes.
+      const writes = /\bfor\s+(all|insert|update|delete)\b/i.test(body) || !/\bfor\s+select\b/i.test(body);
+
+      let kind: PolicyInfo['kind'] | null = null;
+      if (writes && toEveryone) kind = 'open-write';
+      else if (writes && toSignedIn) kind = 'signed-in-write';
+      else if (!writes && toEveryone) kind = 'public-read';
+      if (kind) {
+        policies.push({
+          kind,
           name: m[2] ?? m[3] ?? 'policy',
           table: m[4]!.toLowerCase(),
           loc: { file: file.path, line: lineAt(sql, m.index) },
@@ -62,7 +75,15 @@ function analyzeSupabaseSql(files: SourceFile[]) {
   }
 
   const missing = [...created.values()].filter((t) => !rls.has(t.name));
-  return { created, missing, openPolicies };
+  return { created, missing, policies };
+}
+
+interface PolicyInfo {
+  /** open-write: anyone can write · signed-in-write: any signed-in user can write every row · public-read: anyone can read */
+  kind: 'open-write' | 'signed-in-write' | 'public-read';
+  name: string;
+  table: string;
+  loc: Location;
 }
 
 export const databaseCheck: Check = {
@@ -80,7 +101,7 @@ export const databaseCheck: Check = {
 
     // ---- Supabase Row Level Security ----
     if (supabaseClient || dbs.includes('Supabase')) {
-      const { created, missing, openPolicies } = analyzeSupabaseSql(sqlFiles);
+      const { created, missing, policies } = analyzeSupabaseSql(sqlFiles);
       if (!created.size) {
         out.manual.push({
           id: 'supabase-rls-dashboard',
@@ -105,16 +126,36 @@ export const databaseCheck: Check = {
         out.passed.push(`Row Level Security is on for all ${plural(created.size, 'table')}`);
       }
 
-      for (const p of openPolicies.slice(0, 3)) {
+      for (const p of policies.filter((x) => x.kind === 'open-write').slice(0, 3)) {
         out.findings.push({
           id: 'supabase-open-policy',
-          severity: 'warning',
+          severity: 'critical',
           title: `Supabase policy "${p.name}" lets anyone change the ${p.table} table`,
-          why: 'This policy uses "true" as its rule, which means anyone — even people who are not signed in — can add, edit or delete rows. RLS is switched on, but this policy opens the door again.',
+          why: 'This policy uses "true" as its rule, so anyone (even people who are not signed in) can add, edit or delete rows. That is as bad as having no Row Level Security at all.',
           location: p.loc,
           fixPrompt:
             `In ${where(p.loc)} the Supabase policy "${p.name}" on table "${p.table}" uses (true), so anyone can write to it. ` +
             `Please replace it with policies that only let signed-in users change their own rows (e.g. using (auth.uid() = user_id)), and keep public read access only if the data is meant to be public.`,
+        });
+      }
+      for (const p of policies.filter((x) => x.kind === 'signed-in-write').slice(0, 3)) {
+        out.findings.push({
+          id: 'supabase-signed-in-write-policy',
+          severity: 'warning',
+          title: `Supabase policy "${p.name}": any signed-in user can change every row in ${p.table}`,
+          why: 'The policy is limited to signed-in users, but its rule is "true". Anyone who creates a free account can edit or delete other people\'s rows.',
+          location: p.loc,
+          fixPrompt:
+            `In ${where(p.loc)} the Supabase policy "${p.name}" on "${p.table}" lets any authenticated user write any row (using/with check (true)). ` +
+            `Please change it so users can only change rows they own (e.g. using (auth.uid() = user_id) with check (auth.uid() = user_id)), adding a user_id column if the table needs one.`,
+        });
+      }
+      const publicReadTables = [...new Set(policies.filter((x) => x.kind === 'public-read').map((x) => x.table))];
+      for (const table of publicReadTables.slice(0, 5)) {
+        out.manual.push({
+          id: 'supabase-public-read',
+          title: `Anyone can read every row of ${table}; make sure that is intended`,
+          how: `A "for select using (true)" policy makes ${table} readable by everyone, even signed-out visitors. That's fine for things like a product list, but not for anything personal (emails, orders, messages).`,
         });
       }
     }

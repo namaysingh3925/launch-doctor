@@ -309,3 +309,45 @@ test('a webhook route that calls a verify helper from lib/ counts as verified', 
   );
   assert.ok(!ids(report).includes('stripe-webhook-unverified'), ids(report).join(', '));
 });
+
+// ---- Item 6: Supabase policies are graded by how open they are ----
+
+async function policyReport(sql: string) {
+  return runDoctor(
+    makeProject({
+      'package.json': JSON.stringify({ dependencies: { '@supabase/supabase-js': '2' } }),
+      'supabase/migrations/001.sql': `create table posts (id int, user_id uuid);\nalter table posts enable row level security;\n${sql}\n`,
+    }),
+    opts,
+  );
+}
+const findingFor = (r: Awaited<ReturnType<typeof policyReport>>, id: string) =>
+  category(r, 'database').findings.find((f) => f.id === id);
+
+test('a write policy open to everyone is critical', async () => {
+  for (const sql of [
+    'create policy "p" on posts for all using (true);',
+    'create policy "p" on posts using (true);',
+    'create policy "p" on posts for insert to anon with check (true);',
+    'create policy "p" on posts for delete to public using (true);',
+  ]) {
+    assert.equal(findingFor(await policyReport(sql), 'supabase-open-policy')?.severity, 'critical', sql);
+  }
+});
+
+test('a write policy open to any signed-in user is a warning', async () => {
+  const r = await policyReport('create policy "p" on posts for update to authenticated using (true);');
+  const f = findingFor(r, 'supabase-signed-in-write-policy');
+  assert.equal(f?.severity, 'warning');
+  assert.match(f!.title, /any signed-in user can change every row in posts/);
+  assert.ok(!findingFor(r, 'supabase-open-policy'));
+});
+
+test('service_role policies are ignored and public reads go on the checklist', async () => {
+  const r = await policyReport(
+    'create policy "svc" on posts for all to service_role using (true);\ncreate policy "read" on posts for select to anon using (true);',
+  );
+  assert.deepEqual(category(r, 'database').findings, []);
+  const item = category(r, 'database').manual.find((m) => m.id === 'supabase-public-read');
+  assert.match(item!.title, /Anyone can read every row of posts/);
+});
