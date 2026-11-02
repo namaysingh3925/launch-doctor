@@ -471,3 +471,22 @@ test('the demo folder is deleted even if the scan crashes', async () => {
   assert.match(res.stderr, /boom/);
   assert.deepEqual(readdirSync(tmp).filter((n) => n.startsWith('launch-doctor-demo-')), []);
 });
+
+// ---- Item 14: --json and --ci don't write LAUNCH_FIXES.md unless --out is given ----
+
+test('--json and --ci imply --no-file, but --out still writes', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { existsSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const cli = fileURLToPath(new URL('../src/cli.js', import.meta.url));
+  const project = () => makeProject({ 'package.json': '{"name":"x"}', 'index.js': 'console.log(1)\n' });
+  for (const flag of ['--json', '--ci']) {
+    const dir = project();
+    spawnSync(process.execPath, [cli, dir, '--offline', flag], { encoding: 'utf8' });
+    assert.ok(!existsSync(join(dir, 'LAUNCH_FIXES.md')), `${flag} should not write the fix file`);
+    const out = join(dir, 'custom.md');
+    spawnSync(process.execPath, [cli, dir, '--offline', flag, '--out', out], { encoding: 'utf8' });
+    assert.ok(existsSync(out), `${flag} --out should write the fix file`);
+  }
+});

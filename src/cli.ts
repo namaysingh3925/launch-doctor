@@ -17,9 +17,9 @@ const HELP = `
     --domain <domain>   Domain you send email from (checks SPF / DKIM / DMARC)
     --out <file>        Where to save the fix prompts (default: LAUNCH_FIXES.md in the project)
     --no-file           Don't write the fix prompts file
-    --json              Print the full report as JSON
+    --json              Print the full report as JSON (no fix file unless --out is given)
     --offline           Skip network checks
-    --ci                Exit with code 1 if there are critical issues
+    --ci                Exit with code 1 if there are critical issues (no fix file unless --out)
     --demo              Try it on a sample app full of mistakes
     -h, --help          Show this help
     -v, --version       Show the version
@@ -67,6 +67,8 @@ function parseArgs(argv: string[]): Args {
     else if (!args.path) args.path = a;
     else fail(`Unexpected argument ${a}`);
   }
+  // Machine-readable and CI runs shouldn't leave files behind unless asked to.
+  if ((args.json || args.ci) && !args.out) args.writeFile = false;
   return args;
 }
 
