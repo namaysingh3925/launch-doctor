@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isSensitivePublicName } from '../src/checks/secrets.js';
-import { overall, toGrade } from '../src/grade.js';
+import { overall, scoreCategory, toGrade } from '../src/grade.js';
 import { matchesGitignore, packageNameOf } from '../src/project.js';
 import type { CategoryResult, Finding } from '../src/types.js';
 import { decodeJwtPayload, lineAt, looksLikePlaceholder, mask } from '../src/util.js';
@@ -65,14 +65,18 @@ test('line numbers', () => {
 
 function cat(id: string, weight: number, findings: Finding['severity'][]): CategoryResult {
   const fs: Finding[] = findings.map((severity, i) => ({ id: `${id}-${i}`, severity, title: '', why: '', fixPrompt: '' }));
-  const score = Math.max(0, 100 - 50 * findings.filter((s) => s === 'critical').length - 15 * findings.filter((s) => s === 'warning').length);
-  return { id, name: id, icon: '', weight, applicable: true, findings: fs, passed: [], manual: [], score, grade: toGrade(score) };
+  const out = { applicable: true, findings: fs, passed: [], manual: [] };
+  const score = scoreCategory(out);
+  return { ...out, id, name: id, icon: '', weight, score, grade: toGrade(score) };
 }
 
-test('grading: A only when clean, any critical blocks a good grade', () => {
+test('grading: A only when clean, any critical is an F', () => {
   assert.equal(overall([cat('a', 3, []), cat('b', 1, [])]).grade, 'A');
   assert.equal(overall([cat('a', 3, []), cat('b', 1, ['warning'])]).grade, 'B');
-  assert.equal(overall([cat('a', 3, ['critical']), cat('b', 1, [])]).grade, 'D');
+  assert.equal(overall([cat('a', 3, ['critical']), cat('b', 1, [])]).grade, 'F');
+  assert.equal(overall([cat('a', 3, ['critical']), cat('b', 1, [])]).score <= 39, true);
+  assert.equal(cat('a', 1, ['critical']).grade, 'F');
+  assert.equal(cat('a', 1, ['warning', 'warning', 'warning', 'warning', 'warning']).grade, 'D');
   assert.equal(overall([cat('a', 3, ['critical', 'critical', 'critical'])]).grade, 'F');
   assert.match(overall([cat('a', 1, ['critical', 'critical'])]).verdict, /fix 2 critical issues/);
 });

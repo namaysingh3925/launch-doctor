@@ -39,18 +39,18 @@ npx launch-doctor --demo
   🩺 Launch Doctor v0.1.0
   Checked my-weekend-saas · 12 files · Vite, React, Supabase, Stripe, OpenAI
 
-  Overall grade  F   Not ready to launch: fix 5 critical issues first
+  Overall grade  F   Not ready to launch: fix 6 critical issues first
 
   F  🔑 Secrets & keys       2 critical · 1 to fix · 1 to check
-  F  💾 Database & backups   1 critical · 1 to fix · 1 to check
-  D  💳 Payments             1 critical · 2 to check
+  F  💾 Database & backups   2 critical · 1 to check
+  F  💳 Payments             1 critical · 2 to check
   F  💸 AI & API costs       1 critical · 1 to fix · 1 to check
   B  📧 Email delivery       1 to fix · 3 to check
   C  🚨 Errors & monitoring  2 to fix · 2 to check
   D  📜 Legal & trust        5 to fix
   D  ✨ First impressions    5 to fix · 3 to check
 
-  MUST FIX BEFORE LAUNCH (5)
+  MUST FIX BEFORE LAUNCH (6)
 
   🔴 Stripe live secret key is written directly in your code
      src/lib/stripe.ts:1
