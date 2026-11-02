@@ -1,0 +1,46 @@
+{
+  "name": "launch-doctor",
+  "version": "0.1.0",
+  "description": "A pre-launch checkup for vibe-coded apps. Grades your project A–F on secrets, payments, database safety, email, error tracking, AI costs, legal pages and first impressions — and gives you copy-paste prompts to fix each issue.",
+  "type": "module",
+  "bin": {
+    "launch-doctor": "dist/src/cli.js"
+  },
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "files": [
+    "dist/src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
+    "start": "node dist/src/cli.js",
+    "doctor": "npm run build && node dist/src/cli.js",
+    "prepublishOnly": "npm test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "vibe-coding",
+    "launch",
+    "checklist",
+    "production-readiness",
+    "security",
+    "supabase",
+    "stripe",
+    "lovable",
+    "bolt",
+    "cursor",
+    "claude-code",
+    "cli"
+  ],
+  "author": "namay",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
