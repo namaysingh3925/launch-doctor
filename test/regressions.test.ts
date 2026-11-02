@@ -351,3 +351,23 @@ test('service_role policies are ignored and public reads go on the checklist', a
   const item = category(r, 'database').manual.find((m) => m.id === 'supabase-public-read');
   assert.match(item!.title, /Anyone can read every row of posts/);
 });
+
+// ---- Item 7: a stale LAUNCH_FIXES.md is rewritten when everything passes ----
+
+test('an old LAUNCH_FIXES.md is rewritten with "All clear" when nothing is left to fix', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const dir = makeProject({
+    'notes.md': '# Notes\n',
+    '.launchdoctorignore': 'separate-keys\n',
+    'LAUNCH_FIXES.md': '# Launch Doctor fixes\n\nOLD PROBLEM THAT WAS FIXED\n',
+  });
+  const cli = fileURLToPath(new URL('../src/cli.js', import.meta.url));
+  const res = spawnSync(process.execPath, [cli, dir, '--offline'], { encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } });
+  assert.equal(res.status, 0, res.stderr);
+  const md = readFileSync(join(dir, 'LAUNCH_FIXES.md'), 'utf8');
+  assert.ok(!md.includes('OLD PROBLEM'), 'old content should be gone');
+  assert.match(md, /All clear - nothing to fix/);
+});

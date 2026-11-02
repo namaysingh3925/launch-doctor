@@ -52,6 +52,10 @@ export function renderFixes(report: Report): string {
     );
   }
 
+  if (!ordered.length) {
+    out.push('## All clear - nothing to fix', '', 'Launch Doctor found no problems in your code this time.', '');
+  }
+
   let n = 1;
   if (critical.length) {
     out.push('## 🔴 Must fix before launch', '');

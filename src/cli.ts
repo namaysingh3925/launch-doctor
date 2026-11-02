@@ -113,8 +113,9 @@ async function main(): Promise<void> {
 
   let fixFile: string | undefined;
   const hasSomething = report.counts.critical + report.counts.warning + report.counts.manual > 0;
-  if (args.writeFile && hasSomething) {
-    const target = args.out ? (isAbsolute(args.out) ? args.out : resolve(process.cwd(), args.out)) : join(root, 'LAUNCH_FIXES.md');
+  const target = args.out ? (isAbsolute(args.out) ? args.out : resolve(process.cwd(), args.out)) : join(root, 'LAUNCH_FIXES.md');
+  // Rewrite an existing file even when everything passes, so old problems don't linger in it.
+  if (args.writeFile && (hasSomething || existsSync(target))) {
     try {
       writeFileSync(target, renderFixes(report));
       const rel = relative(process.cwd(), target);
