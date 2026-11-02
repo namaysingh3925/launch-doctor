@@ -371,3 +371,16 @@ test('an old LAUNCH_FIXES.md is rewritten with "All clear" when nothing is left 
   assert.ok(!md.includes('OLD PROBLEM'), 'old content should be gone');
   assert.match(md, /All clear - nothing to fix/);
 });
+
+// ---- Item 9: hitting the file limit still sorts the results ----
+
+test('files are still sorted when the file limit is reached', async () => {
+  const { ProjectContext } = await import('../src/project.js');
+  const files: Record<string, string> = {};
+  for (const name of ['z.js', 'b/y.js', 'a.js', 'c/x.js', 'm.js', 'k/l.js']) files[name] = '';
+  const ctx = new ProjectContext(makeProject(files), { useGit: false, maxFiles: 4 });
+  assert.equal(ctx.truncated, true);
+  assert.equal(ctx.paths.length, 4);
+  assert.deepEqual(ctx.paths, [...ctx.paths].sort());
+  assert.deepEqual(ctx.files.map((f) => f.path), ctx.files.map((f) => f.path).sort((a, b) => a.localeCompare(b)));
+});

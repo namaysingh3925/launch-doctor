@@ -169,9 +169,12 @@ export class ProjectContext {
   private readonly byPath = new Map<string, SourceFile>();
   private readonly clientCache = new Map<string, boolean>();
 
+  private readonly maxFiles: number;
+
   constructor(root: string, options: Options = {}) {
     this.root = resolve(root);
     this.options = options;
+    this.maxFiles = options.maxFiles ?? MAX_FILES;
     this.readIgnoreFile();
     this.walk();
     this.readPackages();
@@ -229,7 +232,7 @@ export class ProjectContext {
 
   private walk(): void {
     const stack: string[] = [''];
-    while (stack.length) {
+    scan: while (stack.length) {
       const rel = stack.pop()!;
       const abs = rel ? join(this.root, rel) : this.root;
       let entries;
@@ -248,9 +251,9 @@ export class ProjectContext {
           continue;
         }
         if (!entry.isFile()) continue;
-        if (this.paths.length >= MAX_FILES) {
+        if (this.paths.length >= this.maxFiles) {
           this.truncated = true;
-          return;
+          break scan; // still sort below
         }
         this.paths.push(relPath);
         if (!shouldRead(entry.name)) continue;

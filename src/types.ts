@@ -80,4 +80,6 @@ export interface Options {
   domain?: string;
   /** Set to false to ignore git (used by tests). Default true. */
   useGit?: boolean;
+  /** Stop reading after this many files (default 20,000). */
+  maxFiles?: number;
 }
