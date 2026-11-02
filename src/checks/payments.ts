@@ -1,6 +1,6 @@
 import type { Check, Finding, Location } from '../types.js';
 import { uniqueBy } from '../util.js';
-import { appCode, at, emptyOutput, notApplicable, serverCode, where } from './common.js';
+import { appCode, at, emptyOutput, isRouteLike, notApplicable, serverCode, where } from './common.js';
 
 const OTHER_PROVIDERS: Record<string, string> = {
   '@lemonsqueezy/lemonsqueezy.js': 'Lemon Squeezy',
@@ -17,6 +17,33 @@ const OTHER_PROVIDERS: Record<string, string> = {
 
 const STRIPE_EVENTS_RE =
   /checkout\.session\.completed|invoice\.paid|invoice\.payment_succeeded|customer\.subscription\.(?:created|updated|deleted)|payment_intent\.succeeded|stripe-signature/i;
+
+const VERIFY_RE = /webhooks\.constructEvent(?:Async)?\s*\(/;
+const READS_BODY = /\b(?:req|request|c\.req)\.(?:text|json|arrayBuffer|body|rawBody|raw|on)\b|\brawBody\b|\bbuffer\s*\(\s*req\b/;
+const SIGNATURE_PASSED = 'Stripe webhooks check the signature, so fake "payment succeeded" messages are rejected';
+
+function parsesJsonFirst(path: string, content: string): boolean {
+  const parsesJson = /\b(?:req|request)\.json\s*\(\s*\)/.test(content);
+  const pagesApiWithParser = /(^|\/)pages\/api\//.test(path) && !/bodyParser\s*:\s*false/.test(content);
+  return parsesJson || pagesApiWithParser;
+}
+
+function unverifiedFinding(loc: Location): Finding {
+  return {
+    id: 'stripe-webhook-unverified',
+    severity: 'critical',
+    title: "Your Stripe webhook doesn't check that messages really come from Stripe",
+    why: 'Anyone can send a fake "payment succeeded" message to your webhook URL and get your product for free. Stripe signs every webhook; your code has to verify that signature.',
+    location: loc,
+    fixPrompt:
+      `My Stripe webhook handler (${where(loc)}) does not verify the Stripe signature. Please update it to:\n` +
+      `1. Read the raw request body (not parsed JSON).\n` +
+      `2. Verify it with stripe.webhooks.constructEvent(rawBody, the "stripe-signature" header, process.env.STRIPE_WEBHOOK_SECRET).\n` +
+      `3. Return a 400 error if verification fails, and only handle the event after it passes.\n` +
+      `4. Make the handler safe if Stripe sends the same event twice (check whether the order was already processed).\n` +
+      `Tell me where to find the webhook signing secret in the Stripe dashboard and how to test with the Stripe CLI.`,
+  };
+}
 
 const GLOBAL_JSON_PARSER = /\.use\s*\(\s*(?:["'`][^"'`]*["'`]\s*,\s*)?(?:express|bodyParser)\.json\s*\(/;
 
@@ -59,42 +86,51 @@ export const paymentsCheck: Check = {
 
     // ---- Stripe ----
     if (stripeServer || stripeClient || stripeLinks) {
-      const verified = ctx.find(/webhooks\.constructEvent(?:Async)?\s*\(/, server);
+      const verified = ctx.find(VERIFY_RE, server);
       const eventHints = ctx.find(STRIPE_EVENTS_RE, server);
 
-      if (verified.length) {
-        out.passed.push('Stripe webhooks check the signature, so fake "payment succeeded" messages are rejected');
-        for (const v of uniqueBy(verified, (m) => m.file.path)) {
-          const parsesJson = /\b(?:req|request)\.json\s*\(\s*\)/.test(v.file.content);
-          const pagesApiWithParser = /(^|\/)pages\/api\//.test(v.file.path) && !/bodyParser\s*:\s*false/.test(v.file.content);
-          if (parsesJson || pagesApiWithParser) out.findings.push(parsedBodyFinding(at(v)));
+      // Helpers that wrap constructEvent (e.g. lib/stripe.ts exporting verifyStripeWebhook) count as verification
+      // when a route calls them.
+      const helperNames = new Set<string>();
+      const helperFiles = uniqueBy(verified, (m) => m.file.path).map((m) => m.file).filter((f) => !isRouteLike(f));
+      for (const f of helperFiles) {
+        for (const h of f.content.matchAll(/export\s+(?:async\s+)?function\s+(\w+)|export\s+const\s+(\w+)\s*=/g)) {
+          helperNames.add((h[1] ?? h[2])!);
         }
       }
+      const helperRe = helperNames.size ? new RegExp(`\\b(?:${[...helperNames].join('|')})\\s*\\(`) : null;
+      const isVerified = (content: string) => VERIFY_RE.test(content) || (helperRe?.test(content) ?? false);
+
+      // Every route that reads a request body and talks about Stripe events is checked on its own.
+      const webhookRoutes = uniqueBy(eventHints, (m) => m.file.path).filter(
+        (m) => isRouteLike(m.file) && READS_BODY.test(m.file.content),
+      );
+
+      if (webhookRoutes.length) {
+        const unverified = webhookRoutes.filter((m) => !isVerified(m.file.content));
+        for (const m of unverified) out.findings.push(unverifiedFinding(at(m)));
+        for (const m of webhookRoutes) {
+          if (unverified.includes(m)) continue;
+          if (parsesJsonFirst(m.file.path, m.file.content)) out.findings.push(parsedBodyFinding(at(m)));
+        }
+        if (!unverified.length) out.passed.push(SIGNATURE_PASSED);
+      } else if (verified.length) {
+        out.passed.push(SIGNATURE_PASSED);
+        for (const v of uniqueBy(verified, (m) => m.file.path)) {
+          if (parsesJsonFirst(v.file.path, v.file.content)) out.findings.push(parsedBodyFinding(at(v)));
+        }
+      } else if (eventHints.length) {
+        out.findings.push(unverifiedFinding(at(eventHints[0]!)));
+      }
+
       // A global JSON body parser (Express) eats the raw body before any webhook route sees it.
       if (verified.length || eventHints.length) {
         const globalJson = ctx.find(GLOBAL_JSON_PARSER, server)[0];
         const rawUsed = ctx.find(/\b(?:express|bodyParser)\.raw\s*\(/, server, 1).length > 0;
         if (globalJson && !rawUsed) out.findings.push(parsedBodyFinding(at(globalJson), true));
       }
-      if (verified.length) {
-        // handled above
-      } else if (eventHints.length) {
-        const m = eventHints[0]!;
-        out.findings.push({
-          id: 'stripe-webhook-unverified',
-          severity: 'critical',
-          title: "Your Stripe webhook doesn't check that messages really come from Stripe",
-          why: 'Anyone can send a fake "payment succeeded" message to your webhook URL and get your product for free. Stripe signs every webhook; your code has to verify that signature.',
-          location: at(m),
-          fixPrompt:
-            `My Stripe webhook handler (${where(at(m))}) does not verify the Stripe signature. Please update it to:\n` +
-            `1. Read the raw request body (not parsed JSON).\n` +
-            `2. Verify it with stripe.webhooks.constructEvent(rawBody, the "stripe-signature" header, process.env.STRIPE_WEBHOOK_SECRET).\n` +
-            `3. Return a 400 error if verification fails, and only handle the event after it passes.\n` +
-            `4. Make the handler safe if Stripe sends the same event twice (check whether the order was already processed).\n` +
-            `Tell me where to find the webhook signing secret in the Stripe dashboard and how to test with the Stripe CLI.`,
-        });
-      } else {
+
+      if (!verified.length && !eventHints.length) {
         out.findings.push({
           id: 'stripe-no-webhook',
           severity: 'warning',

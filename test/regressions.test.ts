@@ -274,3 +274,38 @@ test('express.raw on the webhook route means the global JSON parser is fine', as
   );
   assert.ok(!ids(report).includes('stripe-webhook-parsed-body'), ids(report).join(', '));
 });
+
+// ---- Item 5: every Stripe webhook route is checked on its own ----
+
+const stripeNext = JSON.stringify({ dependencies: { next: '16', stripe: '18' } });
+const verifiedRoute =
+  "import Stripe from 'stripe';\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);\nexport async function POST(req: Request) {\n  const body = await req.text();\n  const event = stripe.webhooks.constructEvent(body, req.headers.get('stripe-signature')!, process.env.STRIPE_WEBHOOK_SECRET!);\n  if (event.type === 'checkout.session.completed') {}\n  return new Response('ok');\n}\n";
+
+test('one verified webhook no longer hides another unverified one', async () => {
+  const report = await runDoctor(
+    makeProject({
+      'package.json': stripeNext,
+      'app/api/stripe/webhook/route.ts': verifiedRoute,
+      'app/api/billing/webhook/route.ts':
+        "export async function POST(req: Request) {\n  const event = await req.json();\n  if (event.type === 'invoice.paid') {}\n  return new Response('ok');\n}\n",
+    }),
+    opts,
+  );
+  const unverified = category(report, 'payments').findings.filter((f) => f.id === 'stripe-webhook-unverified');
+  assert.equal(unverified.length, 1);
+  assert.equal(unverified[0]!.location?.file, 'app/api/billing/webhook/route.ts');
+});
+
+test('a webhook route that calls a verify helper from lib/ counts as verified', async () => {
+  const report = await runDoctor(
+    makeProject({
+      'package.json': stripeNext,
+      'lib/stripe.ts':
+        "import Stripe from 'stripe';\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);\nexport function verifyStripeEvent(body: string, sig: string) {\n  return stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!);\n}\n",
+      'app/api/webhook/route.ts':
+        "import { verifyStripeEvent } from '@/lib/stripe';\nexport async function POST(req: Request) {\n  const event = verifyStripeEvent(await req.text(), req.headers.get('stripe-signature')!);\n  if (event.type === 'checkout.session.completed') {}\n  return new Response('ok');\n}\n",
+    }),
+    opts,
+  );
+  assert.ok(!ids(report).includes('stripe-webhook-unverified'), ids(report).join(', '));
+});

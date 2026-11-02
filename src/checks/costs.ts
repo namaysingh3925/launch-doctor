@@ -2,7 +2,7 @@ import { AUTH_CHECK_RE } from '../detect.js';
 import type { SourceFile } from '../project.js';
 import type { Check } from '../types.js';
 import { lineTextAt, uniqueBy } from '../util.js';
-import { appCode, at, clientCode, emptyOutput, notApplicable, serverCode, where } from './common.js';
+import { appCode, at, clientCode, emptyOutput, isRouteLike, notApplicable, serverCode, where } from './common.js';
 
 const AI_PACKAGES = [
   'openai', '@anthropic-ai/sdk', '@google/generative-ai', '@google/genai', 'ai', '@ai-sdk/', 'groq-sdk',
@@ -27,15 +27,6 @@ const RATE_LIMIT_PACKAGES = [
 
 const RATE_LIMIT_USAGE =
   /new\s+Ratelimit\s*\(|Ratelimit\.slidingWindow\s*\(|\brateLimit\s*\(\s*\{|new\s+RateLimiter\w*\s*\(|\blimiter\.(?:limit|consume|removeTokens)\s*\(|@limiter\.limit\s*\(|\barcjet\s*\(/;
-
-function isRouteLike(f: SourceFile): boolean {
-  return (
-    /(^|\/)(api|routes?|functions|server|actions?|trpc|handlers?)\//.test(f.path) ||
-    /(^|\/)route\.(t|j)s$|\+server\.(t|j)s$|\.server\.(t|j)s$|(^|\/)actions?\.(t|j)s$/.test(f.path) ||
-    /["']use server["']/.test(f.content) ||
-    /\b(?:app|router)\.(?:post|get|all)\s*\(|Deno\.serve\s*\(|\bserve\s*\(\s*async/.test(f.content)
-  );
-}
 
 /** Code in a middleware file that actually turns away signed-out requests. */
 const MIDDLEWARE_BLOCKS =
