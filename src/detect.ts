@@ -76,4 +76,4 @@ export function detectEmailProviders(ctx: ProjectContext): string[] {
 
 /** Common ways code checks who the user is. */
 export const AUTH_CHECK_RE =
-  /getServerSession|\bauth\s*\(\s*\)|currentUser\s*\(|getAuth\s*\(|\.getUser\s*\(|getSession\s*\(|verifyIdToken|verifyToken|jwtVerify|jwt\.verify|clerkClient|withAuth|requireAuth|requireUser|isAuthenticated|ensureAuth|session\?\.user|session\.user|req\.user|request\.user|ctx\.user|locals\.user|validateRequest|getKindeServerSession|getToken\s*\(|[Aa]uthorization/;
+  /getServerSession|\bauth\s*\(\s*\)|currentUser\s*\(|getAuth\s*\(|\.getUser\s*\(|getSession\s*\(|verifyIdToken|verifyToken|jwtVerify|jwt\.verify|clerkClient|withAuth|requireAuth|requireUser|isAuthenticated|ensureAuth|session\?\.user|session\.user|req\.user|request\.user|ctx\.user|locals\.user|validateRequest|getKindeServerSession|getToken\s*\(/;

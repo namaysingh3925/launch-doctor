@@ -228,3 +228,17 @@ test('an imported limiter or real limiter code counts as rate limiting', async (
     assert.ok(!ids(report).includes('no-rate-limit'), `should pass for: ${code}`);
   }
 });
+
+// ---- Item 3: sending an Authorization header to the AI provider is not a user check ----
+
+test('an AI route that only sends an Authorization header upstream is still unprotected', async () => {
+  const report = await runDoctor(
+    makeProject({
+      'package.json': JSON.stringify({ dependencies: { next: '16', openai: '5' } }),
+      'app/api/chat/route.ts':
+        "import OpenAI from 'openai';\nconst openai = new OpenAI({ defaultHeaders: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });\nexport async function POST() {\n  return Response.json(await openai.chat.completions.create({ model: 'gpt-5', messages: [] }));\n}\n",
+    }),
+    opts,
+  );
+  assert.ok(ids(report).includes('ai-endpoint-no-auth'), ids(report).join(', '));
+});
