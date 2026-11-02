@@ -404,3 +404,42 @@ test('package.json requires Node 22 or newer', async () => {
   const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
   assert.equal(pkg.engines.node, '>=22');
 });
+
+// ---- Item 12: .launchdoctorignore bare words and unknown ids ----
+
+test('a bare word in .launchdoctorignore that names a folder is treated as a path', async () => {
+  const report = await runDoctor(
+    makeProject({
+      'package.json': '{}',
+      'scripts/seed.ts': `const k = "${fakeKey('sk_' + 'live_', 28, 21)}";\n`,
+      '.launchdoctorignore': 'scripts\n',
+    }),
+    opts,
+  );
+  assert.ok(!ids(report).includes('stripe-live-key'), ids(report).join(', '));
+  assert.deepEqual(report.unknownIgnoreIds, []);
+});
+
+test('ids in .launchdoctorignore that no check produces are reported', async () => {
+  const { renderReport } = await import('../src/report.js');
+  const report = await runDoctor(
+    makeProject({ 'package.json': '{}', 'index.js': '', '.launchdoctorignore': 'no-error-tracking\nno-eror-boundary\n' }),
+    opts,
+  );
+  assert.deepEqual(report.unknownIgnoreIds, ['no-eror-boundary']);
+  assert.match(renderReport(report), /"no-eror-boundary" in \.launchdoctorignore doesn't match any check/);
+});
+
+test('every id a check produces is listed in its ids array', async () => {
+  const { CHECKS } = await import('../src/index.js');
+  const { createDemoProject } = await import('../src/demo.js');
+  const reports = [await runDoctor(createDemoProject(), opts)];
+  for (const r of reports) {
+    for (const c of r.categories) {
+      const declared = new Set(CHECKS.find((x) => x.id === c.id)!.ids);
+      for (const id of [...c.findings.map((f) => f.id), ...c.manual.map((m) => m.id)]) {
+        assert.ok(declared.has(id), `${c.id} produced "${id}" but doesn't list it in ids`);
+      }
+    }
+  }
+});

@@ -43,6 +43,8 @@ export interface Check {
   icon: string;
   /** How much this category counts towards the overall grade. */
   weight: number;
+  /** Every finding and checklist id this check can produce (used to spot typos in .launchdoctorignore). */
+  ids: readonly string[];
   run(ctx: ProjectContext): CheckOutput | Promise<CheckOutput>;
 }
 
@@ -65,6 +67,8 @@ export interface Report {
   truncated: boolean;
   /** Findings and checklist items silenced by .launchdoctorignore. */
   ignored: number;
+  /** Ids in .launchdoctorignore that no check can produce (probably typos). */
+  unknownIgnoreIds: string[];
   score: number;
   grade: Grade;
   verdict: string;

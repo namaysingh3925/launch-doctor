@@ -19,6 +19,10 @@ export const firstImpressionsCheck: Check = {
   name: 'First impressions',
   icon: '✨',
   weight: 1,
+  ids: [
+    'default-title', 'lovable-default-meta', 'default-favicon', 'no-description', 'no-social-preview', 'hardcoded-localhost',
+    'not-found-page', 'robots-sitemap', 'phone-test',
+  ],
   run(ctx) {
     const frontend =
       ctx.files.some((f) => /\.html?$/i.test(f.path)) ||

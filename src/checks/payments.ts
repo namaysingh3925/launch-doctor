@@ -71,6 +71,10 @@ export const paymentsCheck: Check = {
   name: 'Payments',
   icon: '💳',
   weight: 3,
+  ids: [
+    'stripe-webhook-unverified', 'stripe-webhook-parsed-body', 'stripe-no-webhook', 'razorpay-unverified',
+    'other-provider-webhooks', 'live-test-purchase', 'failed-and-cancelled',
+  ],
   run(ctx) {
     const server = serverCode(ctx);
     const stripeServer = ctx.uses('stripe');

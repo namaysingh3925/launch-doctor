@@ -137,6 +137,10 @@ export const secretsCheck: Check = {
   name: 'Secrets & keys',
   icon: '🔑',
   weight: 3,
+  ids: [
+    ...KEY_PATTERNS.map((p) => p.id),
+    'database-password', 'supabase-service-role-key', 'public-secret-variable', 'env-committed', 'env-not-ignored', 'separate-keys',
+  ],
   run(ctx) {
     const out = emptyOutput();
 

@@ -81,6 +81,10 @@ export const emailCheck: Check = {
   name: 'Email delivery',
   icon: '📧',
   weight: 1,
+  ids: [
+    'email-test-sender', 'email-personal-gmail', 'email-no-spf', 'email-no-dmarc', 'email-dkim', 'email-dns',
+    'supabase-smtp', 'email-real-inbox',
+  ],
   async run(ctx) {
     const providers = detectEmailProviders(ctx);
     // Supabase Auth sends confirmation and password-reset emails on its own.

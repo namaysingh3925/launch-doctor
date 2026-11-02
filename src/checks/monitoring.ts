@@ -16,6 +16,7 @@ export const monitoringCheck: Check = {
   name: 'Errors & monitoring',
   icon: '🚨',
   weight: 1,
+  ids: ['no-error-tracking', 'no-error-boundary', 'uptime-monitor', 'know-your-logs'],
   run(ctx) {
     if (!ctx.files.some(appCode)) return notApplicable('No app code found');
     const out = emptyOutput();

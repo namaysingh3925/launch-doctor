@@ -77,6 +77,7 @@ export const costsCheck: Check = {
   name: 'AI & API costs',
   icon: '💸',
   weight: 2,
+  ids: ['ai-in-browser', 'ai-endpoint-no-auth', 'no-rate-limit', 'spending-limits', 'twilio-geo'],
   run(ctx) {
     const usesAI = ctx.usesAny(AI_PACKAGES) || ctx.find(AI_DIRECT_URL, appCode, 1).length > 0;
     const usesTwilio = ctx.uses('twilio');

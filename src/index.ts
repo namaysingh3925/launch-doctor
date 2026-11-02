@@ -62,6 +62,8 @@ export async function runDoctor(root: string, options: Options = {}): Promise<Re
   }
 
   const summary = overall(categories);
+  const knownIds = new Set(CHECKS.flatMap((c) => c.ids));
+  const unknownIgnoreIds = [...ctx.ignoredIds].filter((id) => !knownIds.has(id)).sort();
   return {
     tool: 'launch-doctor',
     version: version(),
@@ -71,6 +73,7 @@ export async function runDoctor(root: string, options: Options = {}): Promise<Re
     filesScanned: ctx.files.length,
     truncated: ctx.truncated,
     ignored,
+    unknownIgnoreIds,
     ...summary,
     categories,
     generatedAt: new Date().toISOString(),

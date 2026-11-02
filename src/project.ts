@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, extname, join, resolve } from 'node:path';
 import type { Options } from './types.js';
@@ -208,6 +208,7 @@ export class ProjectContext {
    * .launchdoctorignore: one entry per line.
    *   no-error-tracking   -> a plain id silences that finding or checklist item
    *   legacy/             -> anything with "/", "*" or "." is a path pattern to skip
+   *   scripts             -> a bare word that names an existing file or folder is a path too
    */
   private readIgnoreFile(): void {
     let text: string;
@@ -220,7 +221,8 @@ export class ProjectContext {
     for (const raw of text.split(/\r?\n/)) {
       const line = raw.replace(/#.*$/, '').trim();
       if (!line) continue;
-      if (/^[a-z0-9-]+$/.test(line)) this.ignoredIds.add(line);
+      // A bare word is a finding id, unless a file or folder with that name exists (then it's a path).
+      if (/^[a-z0-9-]+$/.test(line) && !existsSync(join(this.root, line))) this.ignoredIds.add(line);
       else pathRules.push(line);
     }
     this.ignoredPathRules = pathRules.join('\n');

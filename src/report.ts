@@ -111,6 +111,12 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
   if (report.ignored) {
     lines.push(`  ${dim(`${plural(report.ignored, 'item')} hidden by .launchdoctorignore`)}`, '');
   }
+  if (report.unknownIgnoreIds.length) {
+    for (const id of report.unknownIgnoreIds) {
+      lines.push(`  ${dim(`Warning: "${id}" in .launchdoctorignore doesn't match any check (typo?)`)}`);
+    }
+    lines.push('');
+  }
 
   if (opts.fixFile) {
     lines.push(`  📋 ${bold('Copy-paste fix prompts saved to')} ${cyan(opts.fixFile)}`);

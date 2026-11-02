@@ -91,6 +91,10 @@ export const databaseCheck: Check = {
   name: 'Database & backups',
   icon: '💾',
   weight: 3,
+  ids: [
+    'supabase-rls-missing', 'supabase-open-policy', 'supabase-signed-in-write-policy', 'supabase-public-read',
+    'supabase-rls-dashboard', 'firebase-open-rules', 'firebase-rules-console', 'sqlite-on-serverless', 'prisma-db-push', 'backups',
+  ],
   run(ctx) {
     const dbs = detectDatabase(ctx);
     if (!dbs.length) return notApplicable('No database found');
