@@ -513,3 +513,40 @@ test('a malicious core.fsmonitor in the scanned repo is not run', { skip: !hasGi
   await runDoctor(dir, { offline: true });
   assert.ok(!existsSync(join(dir, 'PWNED')), 'fsmonitor command must not run');
 });
+
+// ---- Item 16: email DNS: missing domains and return-path SPF ----
+
+function fakeDns(records: Record<string, string[]>, missingDomain = false) {
+  const err = (code: string) => Object.assign(new Error(code), { code });
+  return {
+    async resolveNs() {
+      if (missingDomain) throw err('ENOTFOUND');
+      return ['ns1.example.net'];
+    },
+    async resolveTxt(name: string) {
+      if (records[name]) return records[name]!.map((r) => [r]);
+      throw err('ENODATA');
+    },
+  };
+}
+
+test('a domain that does not exist gives one "check the spelling" warning', async () => {
+  const { checkEmailDns, applyEmailDns } = await import('../src/checks/email.js');
+  const dns = await checkEmailDns('mispelled-domain.com', fakeDns({}, true));
+  assert.equal(dns.notFound, true);
+  const out = { applicable: true, findings: [], passed: [], manual: [] } as import('../src/types.js').CheckOutput;
+  applyEmailDns(out, 'mispelled-domain.com', dns, ['Resend']);
+  assert.deepEqual(out.findings.map((f) => f.id), ['email-domain-not-found']);
+  assert.match(out.findings[0]!.title, /Domain mispelled-domain\.com was not found in DNS - check the spelling/);
+});
+
+test('missing root SPF is a checklist item for SES, Postmark and SendGrid, a warning otherwise', async () => {
+  const { checkEmailDns, applyEmailDns } = await import('../src/checks/email.js');
+  const dns = await checkEmailDns('myapp.com', fakeDns({ '_dmarc.myapp.com': ['v=DMARC1; p=none'] }));
+  for (const [provider, expectWarning] of [['Postmark', false], ['Amazon SES', false], ['SendGrid', false], ['Resend', true]] as const) {
+    const out = { applicable: true, findings: [], passed: [], manual: [] } as import('../src/types.js').CheckOutput;
+    applyEmailDns(out, 'myapp.com', dns, [provider]);
+    assert.equal(out.findings.some((f) => f.id === 'email-no-spf'), expectWarning, provider);
+    assert.equal(out.manual.some((m) => m.id === 'email-spf-return-path'), !expectWarning, provider);
+  }
+});

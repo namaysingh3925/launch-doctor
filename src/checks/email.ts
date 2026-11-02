@@ -1,7 +1,7 @@
 import { Resolver } from 'node:dns/promises';
 import { detectAuth, detectEmailProviders } from '../detect.js';
 import { isEnvPath, type Match, type ProjectContext } from '../project.js';
-import type { Check } from '../types.js';
+import type { Check, CheckOutput } from '../types.js';
 import { mostCommon } from '../util.js';
 import { appCode, at, emptyOutput, notApplicable } from './common.js';
 
@@ -39,7 +39,7 @@ function collectSenders(ctx: ProjectContext): Sender[] {
 
 type TxtResult = string[] | 'missing' | 'error';
 
-async function txt(resolver: Resolver, name: string): Promise<TxtResult> {
+async function txt(resolver: DnsLike, name: string): Promise<TxtResult> {
   try {
     const records = await resolver.resolveTxt(name);
     return records.map((chunks) => chunks.join(''));
@@ -52,13 +52,30 @@ async function txt(resolver: Resolver, name: string): Promise<TxtResult> {
 
 export interface EmailDnsResult {
   offline: boolean;
+  /** The domain itself doesn't exist (no NS records, ENOTFOUND). */
+  notFound: boolean;
   spf: boolean;
   dkim: boolean;
   dmarc: boolean;
 }
 
-export async function checkEmailDns(domain: string): Promise<EmailDnsResult> {
-  const resolver = new Resolver({ timeout: 3000, tries: 2 });
+/** The two DNS calls we need; a real Resolver, or a fake one in tests. */
+export interface DnsLike {
+  resolveNs(name: string): Promise<string[]>;
+  resolveTxt(name: string): Promise<string[][]>;
+}
+
+export async function checkEmailDns(domain: string, resolver: DnsLike = new Resolver({ timeout: 3000, tries: 2 })): Promise<EmailDnsResult> {
+  // Does the domain exist at all? A typo should give one clear message, not three missing records.
+  try {
+    await resolver.resolveNs(domain);
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === 'ENOTFOUND' || code === 'NXDOMAIN') {
+      return { offline: false, notFound: true, spf: false, dkim: false, dmarc: false };
+    }
+    // ENODATA (e.g. a subdomain without its own NS records) or a network error: carry on.
+  }
   const [root, sendSub, dmarc, ...dkim] = await Promise.all([
     txt(resolver, domain),
     txt(resolver, `send.${domain}`),
@@ -66,14 +83,77 @@ export async function checkEmailDns(domain: string): Promise<EmailDnsResult> {
     ...DKIM_SELECTORS.map((s) => txt(resolver, `${s}._domainkey.${domain}`)),
   ]);
   const all = [root, sendSub, dmarc, ...dkim];
-  if (all.every((r) => r === 'error')) return { offline: true, spf: false, dkim: false, dmarc: false };
+  if (all.every((r) => r === 'error')) return { offline: true, notFound: false, spf: false, dkim: false, dmarc: false };
   const has = (r: TxtResult | undefined, re: RegExp) => Array.isArray(r) && r.some((v) => re.test(v));
   return {
     offline: false,
+    notFound: false,
     spf: has(root, /^v=spf1/i) || has(sendSub, /^v=spf1/i),
     dmarc: has(dmarc, /^v=DMARC1/i),
-    dkim: dkim.some((r) => has(r, /v=DKIM1|k=rsa|\bp=/i)),
+    dkim: dkim.some((r) => has(r, /v=DKIM1|k=rsa|p=/i)),
   };
+}
+
+/** Providers that usually publish SPF on a separate return-path (bounce) subdomain, not the root. */
+const RETURN_PATH_PROVIDERS = ['Amazon SES', 'Postmark', 'SendGrid'];
+
+/** Turn DNS results into findings, passes and checklist items. */
+export function applyEmailDns(out: CheckOutput, domain: string, dns: EmailDnsResult, providers: string[]): void {
+  if (dns.offline) {
+    out.manual.push({
+      id: 'email-dns',
+      title: `Check the email DNS records for ${domain}`,
+      how: "Couldn't reach DNS (are you offline?). Your email provider's dashboard should show SPF, DKIM and DMARC as verified.",
+    });
+    return;
+  }
+  if (dns.notFound) {
+    out.findings.push({
+      id: 'email-domain-not-found',
+      severity: 'warning',
+      title: `Domain ${domain} was not found in DNS - check the spelling`,
+      why: "Email can't be sent from, or delivered for, a domain that doesn't exist. Either the domain in your \"from\" address has a typo, or it hasn't been registered yet.",
+      fixPrompt: `My app sends email from the domain ${domain}, but that domain doesn't exist in DNS. Find every place the sender address or domain is set (code and environment variables), check it for typos, and tell me what the correct domain should be.`,
+    });
+    return;
+  }
+  if (dns.spf) out.passed.push(`${domain} has an SPF record`);
+  else {
+    const returnPath = providers.find((p) => RETURN_PATH_PROVIDERS.includes(p));
+    if (returnPath) {
+      out.manual.push({
+        id: 'email-spf-return-path',
+        title: `Check SPF for ${domain} in your ${returnPath} dashboard`,
+        how: `${returnPath} usually puts SPF on a separate return-path (bounce) subdomain, so a missing SPF record on ${domain} itself can be normal. Make sure ${returnPath} shows the domain as fully verified.`,
+      });
+    } else {
+      out.findings.push({
+        id: 'email-no-spf',
+        severity: 'warning',
+        title: `${domain} has no SPF record`,
+        why: 'SPF tells Gmail and Outlook which services may send email for your domain. Without it, your sign-up and password-reset emails are likely to land in spam.',
+        fixPrompt: `My domain ${domain} has no SPF DNS record. Tell me exactly which TXT record to add for my email provider (${providers.join(', ') || 'my email service'}), where to add it at my domain registrar, and how to check it worked.`,
+      });
+    }
+  }
+  if (dns.dmarc) out.passed.push(`${domain} has a DMARC record`);
+  else {
+    out.findings.push({
+      id: 'email-no-dmarc',
+      severity: 'warning',
+      title: `${domain} has no DMARC record`,
+      why: 'Gmail and Yahoo now expect a DMARC record from domains that send email. Without one, more of your emails get rejected or marked as spam, and others can pretend to be you.',
+      fixPrompt: `My domain ${domain} has no DMARC record. Give me a safe starter DMARC TXT record for _dmarc.${domain} (starting with p=none and a reporting address), explain what it does, and when I should tighten it to p=quarantine.`,
+    });
+  }
+  if (dns.dkim) out.passed.push(`${domain} has a DKIM key`);
+  else {
+    out.manual.push({
+      id: 'email-dkim',
+      title: `Check that DKIM is set up for ${domain}`,
+      how: "We couldn't find a DKIM key under common names. Your email provider's dashboard should show the domain as verified; if not, add the DKIM records it gives you.",
+    });
+  }
 }
 
 export const emailCheck: Check = {
@@ -82,8 +162,8 @@ export const emailCheck: Check = {
   icon: '📧',
   weight: 1,
   ids: [
-    'email-test-sender', 'email-personal-gmail', 'email-no-spf', 'email-no-dmarc', 'email-dkim', 'email-dns',
-    'supabase-smtp', 'email-real-inbox',
+    'email-test-sender', 'email-personal-gmail', 'email-domain-not-found', 'email-no-spf', 'email-spf-return-path',
+    'email-no-dmarc', 'email-dkim', 'email-dns', 'supabase-smtp', 'email-real-inbox',
   ],
   async run(ctx) {
     const providers = detectEmailProviders(ctx);
@@ -129,43 +209,7 @@ export const emailCheck: Check = {
     const domain = ctx.options.domain ?? detected;
 
     if (domain && !ctx.options.offline) {
-      const dns = await checkEmailDns(domain);
-      if (dns.offline) {
-        out.manual.push({
-          id: 'email-dns',
-          title: `Check the email DNS records for ${domain}`,
-          how: "Couldn't reach DNS (are you offline?). Your email provider's dashboard should show SPF, DKIM and DMARC as verified.",
-        });
-      } else {
-        if (dns.spf) out.passed.push(`${domain} has an SPF record`);
-        else {
-          out.findings.push({
-            id: 'email-no-spf',
-            severity: 'warning',
-            title: `${domain} has no SPF record`,
-            why: 'SPF tells Gmail and Outlook which services may send email for your domain. Without it, your sign-up and password-reset emails are likely to land in spam.',
-            fixPrompt: `My domain ${domain} has no SPF DNS record. Tell me exactly which TXT record to add for my email provider (${providers.join(', ') || 'my email service'}), where to add it at my domain registrar, and how to check it worked.`,
-          });
-        }
-        if (dns.dmarc) out.passed.push(`${domain} has a DMARC record`);
-        else {
-          out.findings.push({
-            id: 'email-no-dmarc',
-            severity: 'warning',
-            title: `${domain} has no DMARC record`,
-            why: 'Gmail and Yahoo now expect a DMARC record from domains that send email. Without one, more of your emails get rejected or marked as spam, and others can pretend to be you.',
-            fixPrompt: `My domain ${domain} has no DMARC record. Give me a safe starter DMARC TXT record for _dmarc.${domain} (starting with p=none and a reporting address), explain what it does, and when I should tighten it to p=quarantine.`,
-          });
-        }
-        if (dns.dkim) out.passed.push(`${domain} has a DKIM key`);
-        else {
-          out.manual.push({
-            id: 'email-dkim',
-            title: `Check that DKIM is set up for ${domain}`,
-            how: "We couldn't find a DKIM key under common names. Your email provider's dashboard should show the domain as verified; if not, add the DKIM records it gives you.",
-          });
-        }
-      }
+      applyEmailDns(out, domain, await checkEmailDns(domain), providers);
     } else {
       out.manual.push({
         id: 'email-dns',
