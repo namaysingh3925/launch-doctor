@@ -22,23 +22,23 @@ const HELP = `
     npx launch-doctor init [folder]     Create .launchdoctorignore and a GitHub Actions workflow
 
   ${bold('Options')}
-    --domain <domain>   Domain you send email from (checks SPF / DKIM / DMARC)
-    --out <file>        Where to save the fix prompts (default: LAUNCH_FIXES.md in the project)
-    --no-file           Don't write the fix prompts file
-    --json              Print the full report as JSON (no fix file unless --out is given)
-    --sarif <file>      Also write a SARIF 2.1.0 file (for GitHub code scanning)
-    --offline           Skip network checks
-    --ci                Exit with code 1 if there are critical issues (no fix file unless --out)
-    --fail-on <level>   With --ci, the lowest severity that fails: critical (default) or warning
-    --only <ids>        Run only these categories (comma-separated)
-    --skip <ids>        Skip these categories (comma-separated)
-    --history           Also look for keys still in git history (reads the last 500 commits)
-    --history-depth <n> How many commits --history reads (default 500)
-    --update-baseline   Save today's findings to .launchdoctor-baseline.json as accepted
-    --no-baseline       Ignore .launchdoctor-baseline.json and show every finding
-    --demo              Try it on a sample app full of mistakes
-    -h, --help          Show this help
-    -v, --version       Show the version
+    --domain <domain>     Domain you send email from (checks SPF / DKIM / DMARC)
+    --out <file>          Where to save the fix prompts (default: LAUNCH_FIXES.md in the project)
+    --no-file             Don't write the fix prompts file
+    --json                Print the full report as JSON (no fix file unless --out is given)
+    --sarif <file>        Also write a SARIF 2.1.0 file (for GitHub code scanning)
+    --offline             Skip network checks (email DNS)
+    --ci                  Exit with code 1 on findings at or above --fail-on (no fix file unless --out)
+    --fail-on <level>     With --ci, the lowest severity that fails: critical (default) or warning
+    --only <ids>          Run only these categories (comma-separated)
+    --skip <ids>          Skip these categories (comma-separated)
+    --history             Also look for keys still in git history
+    --history-depth <n>   How many commits --history reads (default 500)
+    --update-baseline     Save today's findings to .launchdoctor-baseline.json as accepted
+    --no-baseline         Ignore .launchdoctor-baseline.json and show every finding
+    --demo                Scan a built-in sample app full of mistakes
+    -h, --help            Show this help
+    -v, --version         Show the version
 
   ${bold('Categories')}
     ${CATEGORY_IDS().join(', ')}

@@ -111,7 +111,7 @@ npx launch-doctor init [folder]
 | `--json` | off | Print the full report as JSON (no fix file unless `--out` is given) |
 | `--sarif <file>` | off | Also write a SARIF 2.1.0 file for GitHub code scanning |
 | `--offline` | off | Skip network checks (email DNS) |
-| `--ci` | off | Exit with code 1 if findings at or above `--fail-on` (no fix file unless `--out`) |
+| `--ci` | off | Exit with code 1 on findings at or above `--fail-on` (no fix file unless `--out`) |
 | `--fail-on <level>` | `critical` | With `--ci`, the lowest severity that fails: `critical` or `warning` |
 | `--only <ids>` | all | Run only these categories (comma-separated) |
 | `--skip <ids>` | none | Skip these categories (comma-separated) |
