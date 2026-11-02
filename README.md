@@ -106,8 +106,12 @@ npx launch-doctor [folder] [options]
   --offline           Skip network checks
   --ci                Exit with code 1 if there are critical issues
   --fail-on <level>   With --ci, the lowest severity that fails: critical (default) or warning
+  --only <ids>        Run only these categories (comma-separated)
+  --skip <ids>        Skip these categories (comma-separated)
   --demo              Try it on a sample app full of mistakes
 ```
+
+Category ids for `--only` and `--skip`: `secrets`, `database`, `payments`, `costs`, `email`, `monitoring`, `legal`, `first-impressions`. Skipped categories show as "skipped" and don't count toward the grade, for example `npx launch-doctor --only secrets,database`.
 
 ## Use it in CI
 

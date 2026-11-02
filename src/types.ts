@@ -51,6 +51,8 @@ export interface CategoryResult extends CheckOutput {
   id: string;
   name: string;
   weight: number;
+  /** True when the category was left out with --only / --skip. */
+  skipped?: boolean;
   score: number | null;
   grade: Grade | null;
 }
@@ -84,4 +86,8 @@ export interface Options {
   useGit?: boolean;
   /** Stop reading after this many files (default 20,000). */
   maxFiles?: number;
+  /** Run only these category ids. */
+  only?: string[];
+  /** Skip these category ids. */
+  skip?: string[];
 }

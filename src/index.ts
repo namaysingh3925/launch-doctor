@@ -11,6 +11,10 @@ import { ProjectContext } from './project.js';
 import type { CategoryResult, Check, CheckOutput, Finding, Options, Report } from './types.js';
 import { version } from './version.js';
 
+function notRun(note: string): CheckOutput {
+  return { applicable: false, note, findings: [], passed: [], manual: [] };
+}
+
 export const CHECKS: Check[] = [
   secretsCheck,
   databaseCheck,
@@ -40,23 +44,35 @@ export function isInlineIgnored(ctx: ProjectContext, f: Finding): boolean {
   return false;
 }
 
+/** Category ids accepted by --only / --skip. */
+export const CATEGORY_IDS = (): string[] => CHECKS.map((c) => c.id);
+
 export async function runDoctor(root: string, options: Options = {}): Promise<Report> {
+  const unknown = [...(options.only ?? []), ...(options.skip ?? [])].filter((id) => !CATEGORY_IDS().includes(id));
+  if (unknown.length) throw new Error(`Unknown category: ${unknown.join(', ')}. Use one of: ${CATEGORY_IDS().join(', ')}`);
   const ctx = new ProjectContext(root, options);
   const categories: CategoryResult[] = [];
   let ignored = 0;
 
   for (const check of CHECKS) {
+    const wanted = (!options.only || options.only.includes(check.id)) && !options.skip?.includes(check.id);
+    if (!wanted) {
+      categories.push({
+        ...notRun('skipped'),
+        id: check.id,
+        name: check.name,
+        weight: check.weight,
+        skipped: true,
+        score: null,
+        grade: null,
+      });
+      continue;
+    }
     let out: CheckOutput;
     try {
       out = await check.run(ctx);
     } catch (err) {
-      out = {
-        applicable: false,
-        note: `This check crashed: ${(err as Error).message}`,
-        findings: [],
-        passed: [],
-        manual: [],
-      };
+      out = notRun(`This check crashed: ${(err as Error).message}`);
     }
     // Inline: a "launch-doctor-ignore <id>" comment on the finding's line or the line above.
     const inline = out.findings.filter((f) => isInlineIgnored(ctx, f));

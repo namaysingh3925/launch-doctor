@@ -40,6 +40,7 @@ function wrap(text: string, width: number, indent: string): string[] {
 }
 
 function categorySummary(c: CategoryResult): string {
+  if (c.skipped) return dim('skipped');
   if (!c.applicable) return dim(c.note ?? 'not used');
   const critical = c.findings.filter((f) => f.severity === 'critical').length;
   const warning = c.findings.filter((f) => f.severity === 'warning').length;

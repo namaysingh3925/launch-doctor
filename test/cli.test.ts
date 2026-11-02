@@ -102,3 +102,26 @@ test('--fail-on picks which severity fails a --ci run', () => {
   assert.match(bad.stderr, /--fail-on must be "critical" or "warning"/);
   assert.match(run(['--help']).stdout, /--fail-on <level>/);
 });
+
+test('--only and --skip choose categories; skipped ones do not count toward the grade', () => {
+  const only = JSON.parse(run([leaky(), '--offline', '--json', '--only', 'first-impressions']).stdout);
+  const byId = (r: { categories: { id: string; skipped?: boolean; grade: string | null }[] }, id: string) =>
+    r.categories.find((c) => c.id === id)!;
+  assert.equal(byId(only, 'secrets').skipped, true);
+  assert.equal(byId(only, 'secrets').grade, null);
+  assert.equal(byId(only, 'first-impressions').skipped, undefined);
+  assert.notEqual(only.grade, 'F', 'the critical Stripe key is in a skipped category, so it must not drag the grade down');
+
+  const skip = JSON.parse(run([leaky(), '--offline', '--json', '--skip=secrets,payments']).stdout);
+  assert.equal(byId(skip, 'secrets').skipped, true);
+  assert.equal(byId(skip, 'payments').skipped, true);
+  assert.equal(byId(skip, 'database').skipped, undefined);
+
+  const text = run([leaky(), '--offline', '--no-file', '--only', 'secrets']).stdout;
+  assert.match(text, /Payments\s+skipped/);
+
+  const bad = run([leaky(), '--only', 'secrets,nope']);
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /unknown category "nope"/);
+  assert.match(run(['--help']).stdout, /--only <ids>[\s\S]*first-impressions/);
+});

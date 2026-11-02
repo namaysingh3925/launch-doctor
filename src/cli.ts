@@ -4,7 +4,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { createDemoProject } from './demo.js';
 import { renderFixes } from './fixes.js';
 import { failingFindings } from './grade.js';
-import { runDoctor } from './index.js';
+import { CATEGORY_IDS, runDoctor } from './index.js';
 import { bold, dim, renderReport } from './report.js';
 import type { Severity } from './types.js';
 import { version } from './version.js';
@@ -23,9 +23,14 @@ const HELP = `
     --offline           Skip network checks
     --ci                Exit with code 1 if there are critical issues (no fix file unless --out)
     --fail-on <level>   With --ci, the lowest severity that fails: critical (default) or warning
+    --only <ids>        Run only these categories (comma-separated)
+    --skip <ids>        Skip these categories (comma-separated)
     --demo              Try it on a sample app full of mistakes
     -h, --help          Show this help
     -v, --version       Show the version
+
+  ${bold('Categories')}
+    ${CATEGORY_IDS().join(', ')}
 
   ${bold('Ignoring findings')}
     .launchdoctorignore            one finding id or path per line
@@ -46,6 +51,8 @@ interface Args {
   offline: boolean;
   ci: boolean;
   failOn: Severity;
+  only?: string[];
+  skip?: string[];
   demo: boolean;
   help: boolean;
   version: boolean;
@@ -73,6 +80,10 @@ function parseArgs(argv: string[]): Args {
     else if (a.startsWith('--domain=')) args.domain = cleanDomain(a.slice(9));
     else if (a === '--fail-on') args.failOn = severityArg(value());
     else if (a.startsWith('--fail-on=')) args.failOn = severityArg(a.slice(10));
+    else if (a === '--only') args.only = categoriesArg(a, value());
+    else if (a.startsWith('--only=')) args.only = categoriesArg('--only', a.slice(7));
+    else if (a === '--skip') args.skip = categoriesArg(a, value());
+    else if (a.startsWith('--skip=')) args.skip = categoriesArg('--skip', a.slice(7));
     else if (a === '--out') args.out = value();
     else if (a.startsWith('--out=')) args.out = a.slice(6);
     else if (a.startsWith('-')) fail(`Unknown option ${a}. Run with --help to see the options.`);
@@ -82,6 +93,15 @@ function parseArgs(argv: string[]): Args {
   // Machine-readable and CI runs shouldn't leave files behind unless asked to.
   if ((args.json || args.ci) && !args.out) args.writeFile = false;
   return args;
+}
+
+function categoriesArg(flag: string, input: string): string[] {
+  const ids = input.split(',').map((s) => s.trim()).filter(Boolean);
+  const unknown = ids.filter((id) => !CATEGORY_IDS().includes(id));
+  if (!ids.length || unknown.length) {
+    fail(`${flag}: unknown category "${unknown.join('", "') || input}". Use: ${CATEGORY_IDS().join(', ')}`);
+  }
+  return ids;
 }
 
 function severityArg(input: string): Severity {
@@ -125,7 +145,7 @@ async function main(): Promise<void> {
 
   let report;
   try {
-    report = await runDoctor(root, { offline: args.offline, domain: args.domain });
+    report = await runDoctor(root, { offline: args.offline, domain: args.domain, only: args.only, skip: args.skip });
   } finally {
     // The demo project lives in a temp folder; always clean it up, even if the scan throws.
     if (args.demo) rmSync(root, { recursive: true, force: true });
