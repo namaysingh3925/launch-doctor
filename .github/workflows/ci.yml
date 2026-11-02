@@ -5,8 +5,31 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  lint:
+    name: Lint, format and typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+
   test:
+    name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
+    needs: lint
     strategy:
       fail-fast: false
       matrix:
@@ -18,7 +41,24 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
+          cache: npm
       - run: npm ci
       - run: npm test
       - name: Demo runs
         run: node dist/src/cli.js --demo
+      - name: Self-scan
+        run: node dist/src/cli.js . --ci --no-file --offline
+
+  package:
+    name: Package contents
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check what npm would publish
+        run: node scripts/check-package.mjs
