@@ -242,3 +242,35 @@ test('an AI route that only sends an Authorization header upstream is still unpr
   );
   assert.ok(ids(report).includes('ai-endpoint-no-auth'), ids(report).join(', '));
 });
+
+// ---- Item 4: a global express.json() breaks Stripe signature checks ----
+
+const expressStripe = {
+  'package.json': JSON.stringify({ dependencies: { express: '5', stripe: '18' } }),
+  'server/webhook.ts':
+    "import Stripe from 'stripe';\nconst stripe = new Stripe(process.env.STRIPE_SECRET_KEY);\nexport function webhook(req, res) {\n  const event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], process.env.STRIPE_WEBHOOK_SECRET);\n  res.json({ ok: true });\n}\n",
+};
+
+test('app.use(express.json()) with no express.raw is reported at the express.json line', async () => {
+  const report = await runDoctor(
+    makeProject({
+      ...expressStripe,
+      'server/index.ts': "import express from 'express';\nimport { webhook } from './webhook';\nconst app = express();\napp.use(express.json());\napp.post('/webhook', webhook);\napp.listen(3000);\n",
+    }),
+    opts,
+  );
+  const f = category(report, 'payments').findings.find((x) => x.id === 'stripe-webhook-parsed-body');
+  assert.equal(f?.location?.file, 'server/index.ts');
+  assert.equal(f?.location?.line, 4);
+});
+
+test('express.raw on the webhook route means the global JSON parser is fine', async () => {
+  const report = await runDoctor(
+    makeProject({
+      ...expressStripe,
+      'server/index.ts': "import express from 'express';\nimport { webhook } from './webhook';\nconst app = express();\napp.post('/webhook', express.raw({ type: 'application/json' }), webhook);\napp.use(express.json());\napp.listen(3000);\n",
+    }),
+    opts,
+  );
+  assert.ok(!ids(report).includes('stripe-webhook-parsed-body'), ids(report).join(', '));
+});

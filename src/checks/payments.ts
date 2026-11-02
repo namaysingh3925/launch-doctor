@@ -1,4 +1,4 @@
-import type { Check } from '../types.js';
+import type { Check, Finding, Location } from '../types.js';
 import { uniqueBy } from '../util.js';
 import { appCode, at, emptyOutput, notApplicable, serverCode, where } from './common.js';
 
@@ -17,6 +17,27 @@ const OTHER_PROVIDERS: Record<string, string> = {
 
 const STRIPE_EVENTS_RE =
   /checkout\.session\.completed|invoice\.paid|invoice\.payment_succeeded|customer\.subscription\.(?:created|updated|deleted)|payment_intent\.succeeded|stripe-signature/i;
+
+const GLOBAL_JSON_PARSER = /\.use\s*\(\s*(?:["'`][^"'`]*["'`]\s*,\s*)?(?:express|bodyParser)\.json\s*\(/;
+
+function parsedBodyFinding(loc: Location, globalParser = false): Finding {
+  return {
+    id: 'stripe-webhook-parsed-body',
+    severity: 'warning',
+    title: globalParser
+      ? 'A global JSON body parser runs before your Stripe webhook'
+      : 'Stripe webhook reads the body as JSON before checking the signature',
+    why: 'The signature check needs the exact raw text Stripe sent. If the body is parsed as JSON first, every real webhook fails — customers pay, but your app never finds out.',
+    location: loc,
+    fixPrompt: globalParser
+      ? `In ${where(loc)} my Express app parses every request body as JSON (app.use(express.json())), so my Stripe webhook never gets the raw body it needs for stripe.webhooks.constructEvent. ` +
+        `Please register the webhook route with express.raw({ type: "application/json" }) BEFORE the global express.json() line (or skip JSON parsing for that path), ` +
+        `pass the raw body to constructEvent, and show me how to test it with "stripe listen --forward-to".`
+      : `In ${where(loc)} my Stripe webhook parses the request body as JSON before calling stripe.webhooks.constructEvent. ` +
+        `Please change it to read the raw body (for Next.js App Router: "const body = await req.text()"; for Pages Router: disable bodyParser and read the raw buffer; for Express: use express.raw({ type: "application/json" }) on this route only) ` +
+        `and pass that raw body to constructEvent. Then show me how to test it with "stripe listen --forward-to".`,
+  };
+}
 
 export const paymentsCheck: Check = {
   id: 'payments',
@@ -46,20 +67,17 @@ export const paymentsCheck: Check = {
         for (const v of uniqueBy(verified, (m) => m.file.path)) {
           const parsesJson = /\b(?:req|request)\.json\s*\(\s*\)/.test(v.file.content);
           const pagesApiWithParser = /(^|\/)pages\/api\//.test(v.file.path) && !/bodyParser\s*:\s*false/.test(v.file.content);
-          if (parsesJson || pagesApiWithParser) {
-            out.findings.push({
-              id: 'stripe-webhook-parsed-body',
-              severity: 'warning',
-              title: 'Stripe webhook reads the body as JSON before checking the signature',
-              why: 'The signature check needs the exact raw text Stripe sent. If the body is parsed as JSON first, every real webhook fails — customers pay, but your app never finds out.',
-              location: at(v),
-              fixPrompt:
-                `In ${where(at(v))} my Stripe webhook parses the request body as JSON before calling stripe.webhooks.constructEvent. ` +
-                `Please change it to read the raw body (for Next.js App Router: "const body = await req.text()"; for Pages Router: disable bodyParser and read the raw buffer; for Express: use express.raw({ type: "application/json" }) on this route only) ` +
-                `and pass that raw body to constructEvent. Then show me how to test it with "stripe listen --forward-to".`,
-            });
-          }
+          if (parsesJson || pagesApiWithParser) out.findings.push(parsedBodyFinding(at(v)));
         }
+      }
+      // A global JSON body parser (Express) eats the raw body before any webhook route sees it.
+      if (verified.length || eventHints.length) {
+        const globalJson = ctx.find(GLOBAL_JSON_PARSER, server)[0];
+        const rawUsed = ctx.find(/\b(?:express|bodyParser)\.raw\s*\(/, server, 1).length > 0;
+        if (globalJson && !rawUsed) out.findings.push(parsedBodyFinding(at(globalJson), true));
+      }
+      if (verified.length) {
+        // handled above
       } else if (eventHints.length) {
         const m = eventHints[0]!;
         out.findings.push({
