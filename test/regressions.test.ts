@@ -150,3 +150,50 @@ test('gitignore "**/" patterns match at any depth', () => {
   assert.equal(matchesGitignore('**/config/.env', 'apps/web/config/.env'), true);
   assert.equal(matchesGitignore('**/config/.env', 'apps/web/.env'), false);
 });
+
+// ---- Item 1: middleware only counts when it really blocks /api requests ----
+
+const aiRoute = {
+  'app/api/chat/route.ts':
+    "import OpenAI from 'openai';\nconst openai = new OpenAI();\nexport async function POST() {\n  return Response.json(await openai.chat.completions.create({ model: 'gpt-5', messages: [] }));\n}\n",
+};
+const nextAi = JSON.stringify({ dependencies: { next: '16', react: '19', openai: '5' } });
+
+test('middleware that only refreshes the Supabase session does not protect AI routes', async () => {
+  const report = await runDoctor(
+    makeProject({
+      'package.json': nextAi,
+      ...aiRoute,
+      'middleware.ts':
+        "import { updateSession } from './lib/supabase/middleware';\nexport async function middleware(req) { return await updateSession(req); }\n",
+    }),
+    opts,
+  );
+  assert.ok(ids(report).includes('ai-endpoint-no-auth'), ids(report).join(', '));
+});
+
+test('middleware that blocks requests and covers /api protects AI routes', async () => {
+  const report = await runDoctor(
+    makeProject({
+      'package.json': nextAi,
+      ...aiRoute,
+      'middleware.ts':
+        "import { clerkMiddleware } from '@clerk/nextjs/server';\nexport default clerkMiddleware(async (auth) => { await auth.protect(); });\nexport const config = { matcher: ['/((?!_next|[^?]*\\.(?:html|css|js)).*)', '/(api|trpc)(.*)'] };\n",
+    }),
+    opts,
+  );
+  assert.ok(!ids(report).includes('ai-endpoint-no-auth'), ids(report).join(', '));
+});
+
+test('blocking middleware whose matcher skips /api does not protect AI routes', async () => {
+  const report = await runDoctor(
+    makeProject({
+      'package.json': nextAi,
+      ...aiRoute,
+      'middleware.ts':
+        "import { NextResponse } from 'next/server';\nexport function middleware(req) { if (!req.cookies.get('session')) return NextResponse.redirect(new URL('/login', req.url)); }\nexport const config = { matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'] };\n",
+    }),
+    opts,
+  );
+  assert.ok(ids(report).includes('ai-endpoint-no-auth'), ids(report).join(', '));
+});

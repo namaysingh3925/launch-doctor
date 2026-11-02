@@ -34,6 +34,50 @@ function isRouteLike(f: SourceFile): boolean {
   );
 }
 
+/** Code in a middleware file that actually turns away signed-out requests. */
+const MIDDLEWARE_BLOCKS =
+  /\.protect\s*\(|status\s*:\s*401|NextResponse\.redirect\s*\(|\bredirect\s*\([^)]*["'`][^"'`]*\/(?:login|sign-?in)\b/i;
+
+/**
+ * The strings in `matcher: "..."` or `matcher: ["...", "..."]`, or null if there is no matcher.
+ * Read string by string, because matcher patterns often contain "]" themselves.
+ */
+function matcherEntries(content: string): string[] | null {
+  const start = /matcher\s*:\s*/.exec(content);
+  if (!start) return null;
+  let i = start.index + start[0].length;
+  const inArray = content[i] === '[';
+  if (inArray) i++;
+  const entries: string[] = [];
+  const str = /\s*,?\s*(["'`])((?:\\.|(?!\1)[^\\])*)\1/y;
+  for (;;) {
+    str.lastIndex = i;
+    const m = str.exec(content);
+    if (!m) break;
+    entries.push(m[2]!);
+    i = str.lastIndex;
+    if (!inArray) break;
+  }
+  return entries;
+}
+
+/**
+ * True when a Next.js-style middleware (or proxy) file blocks signed-out users AND runs on /api routes.
+ * Middleware that only refreshes the session (e.g. Supabase's updateSession) doesn't count.
+ */
+export function middlewareBlocksApi(f: SourceFile): boolean {
+  if (!/(^|\/)(?:src\/)?(middleware|proxy)\.(t|j)s$/.test(f.path)) return false;
+  if (!MIDDLEWARE_BLOCKS.test(f.content)) return false;
+  const entries = matcherEntries(f.content);
+  if (!entries) return true; // no matcher: runs on every route
+  return entries.some((e) => {
+    if (/(^|\/)\(?api\b|\(api\||\|api\)/.test(e) && !/\(\?!/.test(e)) return true; // e.g. "/api/:path*" or "/(api|trpc)(.*)"
+    const catchAll = /^\/(\(.*\)|:path\*|\.\*)/.test(e) || e === '/(.*)';
+    const excludesApi = /\(\?![^)]*\bapi\b/.test(e);
+    return catchAll && !excludesApi;
+  });
+}
+
 export const costsCheck: Check = {
   id: 'costs',
   name: 'AI & API costs',
@@ -78,9 +122,7 @@ export const costsCheck: Check = {
     if (!browserHits.length) out.passed.push('Paid AI APIs are only called from your server');
 
     // 2. AI endpoints that anyone can call
-    const middlewareProtects = ctx.files.some(
-      (f) => /(^|\/)(?:src\/)?(middleware|proxy)\.(t|j)s$/.test(f.path) && /auth|clerkMiddleware|withAuth|updateSession|getToken|session/i.test(f.content),
-    );
+    const middlewareProtects = ctx.files.some((f) => middlewareBlocksApi(f));
     const aiRoutes = uniqueBy(
       ctx.find(AI_CALL, (f) => server(f) && isRouteLike(f)),
       (m) => m.file.path,
