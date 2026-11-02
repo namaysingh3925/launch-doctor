@@ -3,7 +3,6 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, extname, join, resolve } from 'node:path';
 import type { Options } from './types.js';
-import { lineAt } from './util.js';
 
 export interface SourceFile {
   /** Path relative to the project root, always with forward slashes. */
@@ -168,6 +167,7 @@ export class ProjectContext {
   private readonly tracked: Set<string> | null;
   private readonly byPath = new Map<string, SourceFile>();
   private readonly clientCache = new Map<string, boolean>();
+  private readonly lineStarts = new Map<string, number[]>();
 
   private readonly maxFiles: number;
 
@@ -375,12 +375,32 @@ export class ProjectContext {
       g.lastIndex = 0;
       let m: RegExpExecArray | null;
       while ((m = g.exec(file.content))) {
-        out.push({ file, index: m.index, line: lineAt(file.content, m.index), match: m });
+        out.push({ file, index: m.index, line: this.lineOf(file, m.index), match: m });
         if (out.length >= limit) return out;
         if (m[0].length === 0) g.lastIndex++;
       }
     }
     return out;
+  }
+
+  /** 1-based line number of a character index, using cached line starts and a binary search. */
+  lineOf(file: SourceFile, index: number): number {
+    let starts = this.lineStarts.get(file.path);
+    if (!starts) {
+      starts = [0];
+      const text = file.content;
+      for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) starts.push(i + 1);
+      this.lineStarts.set(file.path, starts);
+    }
+    // Largest start <= index.
+    let lo = 0;
+    let hi = starts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (starts[mid]! <= index) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo + 1;
   }
 
   /** Best guess: does this file end up in the browser? */

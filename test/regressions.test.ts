@@ -384,3 +384,15 @@ test('files are still sorted when the file limit is reached', async () => {
   assert.deepEqual(ctx.paths, [...ctx.paths].sort());
   assert.deepEqual(ctx.files.map((f) => f.path), ctx.files.map((f) => f.path).sort((a, b) => a.localeCompare(b)));
 });
+
+// ---- Item 10: line numbers from cached line starts match lineAt() ----
+
+test('find() line numbers match lineAt() for every position', async () => {
+  const { ProjectContext } = await import('../src/project.js');
+  const { lineAt } = await import('../src/util.js');
+  const content = 'first\n\nthird line\r\nfourth\nX at five\n\n\nX at eight\nX';
+  const ctx = new ProjectContext(makeProject({ 'a.js': content }), { useGit: false });
+  const file = ctx.files.find((f) => f.path === 'a.js')!;
+  for (let i = 0; i <= content.length; i++) assert.equal(ctx.lineOf(file, i), lineAt(content, i), `index ${i}`);
+  assert.deepEqual(ctx.find(/X/).map((m) => m.line), [5, 8, 9]);
+});
