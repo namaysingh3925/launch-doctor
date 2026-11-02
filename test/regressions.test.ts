@@ -197,3 +197,34 @@ test('blocking middleware whose matcher skips /api does not protect AI routes', 
   );
   assert.ok(ids(report).includes('ai-endpoint-no-auth'), ids(report).join(', '));
 });
+
+// ---- Item 2: rate limiting needs a real limiter, not just the words ----
+
+test('comments, RateLimitError handling and unused packages do not count as rate limiting', async () => {
+  const report = await runDoctor(
+    makeProject({
+      'package.json': JSON.stringify({ dependencies: { next: '16', openai: '5', '@upstash/ratelimit': '2' } }),
+      'app/api/chat/route.ts':
+        "import OpenAI from 'openai';\nconst openai = new OpenAI();\n// TODO: add rate limit before launch\nexport async function POST() {\n  try { return Response.json(await openai.chat.completions.create({ model: 'gpt-5', messages: [] })); }\n  catch (e) { if (e instanceof OpenAI.RateLimitError) return new Response('busy', { status: 429 }); throw e; }\n}\n",
+    }),
+    opts,
+  );
+  assert.ok(ids(report).includes('no-rate-limit'), ids(report).join(', '));
+});
+
+test('an imported limiter or real limiter code counts as rate limiting', async () => {
+  for (const code of [
+    "import { Ratelimit } from '@upstash/ratelimit';\nexport const rl = 1;\n",
+    'const limiter = makeLimiter();\nexport async function check(ip) { await limiter.consume(ip); }\n',
+  ]) {
+    const report = await runDoctor(
+      makeProject({
+        'package.json': JSON.stringify({ dependencies: { next: '16', openai: '5' } }),
+        'app/api/chat/route.ts': "import OpenAI from 'openai';\nexport const x = new OpenAI();\n",
+        'lib/limit.ts': code,
+      }),
+      opts,
+    );
+    assert.ok(!ids(report).includes('no-rate-limit'), `should pass for: ${code}`);
+  }
+});

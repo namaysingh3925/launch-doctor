@@ -345,6 +345,15 @@ export class ProjectContext {
     return names.some((n) => this.uses(n));
   }
 
+  /** Is this package actually imported in code (not just listed in package.json)? "/" suffix matches a scope. */
+  imported(name: string): boolean {
+    if (name.endsWith('/')) {
+      for (const d of this.imports) if (d.startsWith(name)) return true;
+      return false;
+    }
+    return this.imports.has(name);
+  }
+
   file(path: string): SourceFile | undefined {
     return this.byPath.get(path);
   }

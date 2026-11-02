@@ -25,6 +25,9 @@ const RATE_LIMIT_PACKAGES = [
   'hono-rate-limiter', '@nestjs/throttler', 'next-rate-limit', 'limiter', '@fastify/rate-limit', 'koa-ratelimit',
 ];
 
+const RATE_LIMIT_USAGE =
+  /new\s+Ratelimit\s*\(|Ratelimit\.slidingWindow\s*\(|\brateLimit\s*\(\s*\{|new\s+RateLimiter\w*\s*\(|\blimiter\.(?:limit|consume|removeTokens)\s*\(|@limiter\.limit\s*\(|\barcjet\s*\(/;
+
 function isRouteLike(f: SourceFile): boolean {
   return (
     /(^|\/)(api|routes?|functions|server|actions?|trpc|handlers?)\//.test(f.path) ||
@@ -142,9 +145,10 @@ export const costsCheck: Check = {
     }
     if (aiRoutes.length && !unprotected.length) out.passed.push('AI endpoints check who is calling');
 
-    // 3. Rate limiting
+    // 3. Rate limiting: an imported rate-limit package, or code that really sets up a limiter.
+    // (Comments and "RateLimitError" handling don't count.)
     const rateLimited =
-      ctx.usesAny(RATE_LIMIT_PACKAGES) || ctx.find(/rate.?limit|ratelimit|throttl/i, server, 1).length > 0;
+      RATE_LIMIT_PACKAGES.some((p) => ctx.imported(p)) || ctx.find(RATE_LIMIT_USAGE, server, 1).length > 0;
     if (rateLimited) {
       out.passed.push('Rate limiting is in place');
     } else {
