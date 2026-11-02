@@ -215,3 +215,30 @@ test('--update-baseline records findings; later runs only fail on new ones', asy
   assert.equal(run([dir, '--offline', '--ci', '--no-baseline']).status, 1);
   assert.match(run(['--help']).stdout, /--update-baseline[\s\S]*--no-baseline/);
 });
+
+test('init creates the starter files once and never overwrites them', async () => {
+  const { WORKFLOW_TEMPLATE } = await import('../src/init.js');
+  const { writeFileSync } = await import('node:fs');
+  const dir = makeProject({ 'package.json': '{}' });
+  const first = run(['init', dir]);
+  assert.equal(first.status, 0, first.stderr);
+  assert.match(first.stdout, /created\s+\.launchdoctorignore/);
+  assert.match(first.stdout, /created\s+\.github\/workflows\/launch-doctor\.yml/);
+  assert.equal(readFileSync(join(dir, '.github/workflows/launch-doctor.yml'), 'utf8'), WORKFLOW_TEMPLATE);
+  assert.match(readFileSync(join(dir, '.launchdoctorignore'), 'utf8'), /^# \.launchdoctorignore/);
+
+  writeFileSync(join(dir, '.launchdoctorignore'), 'my-own-rules\n');
+  const second = run(['init', dir]);
+  assert.equal(second.status, 0);
+  assert.match(second.stdout, /skipped\s+\.launchdoctorignore/);
+  assert.match(second.stdout, /skipped\s+\.github\/workflows\/launch-doctor\.yml/);
+  assert.equal(readFileSync(join(dir, '.launchdoctorignore'), 'utf8'), 'my-own-rules\n', 'existing file untouched');
+  assert.equal(run(['init', dir, '--force']).status, 2);
+  assert.match(run(['--help']).stdout, /launch-doctor init/);
+});
+
+test('the init workflow matches the README CI example', async () => {
+  const { WORKFLOW_TEMPLATE } = await import('../src/init.js');
+  const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
+  assert.ok(readme.includes(WORKFLOW_TEMPLATE.trimEnd()), 'README CI example and init template drifted apart');
+});

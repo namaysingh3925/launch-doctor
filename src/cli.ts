@@ -4,6 +4,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { applyBaseline, BASELINE_FILE, loadBaseline, writeBaseline } from './baseline.js';
 import { createDemoProject } from './demo.js';
 import { renderFixes } from './fixes.js';
+import { runInit } from './init.js';
 import { failingFindings } from './grade.js';
 import { CATEGORY_IDS, runDoctor } from './index.js';
 import { bold, dim, renderReport } from './report.js';
@@ -17,6 +18,7 @@ const HELP = `
 
   ${bold('Usage')}
     npx launch-doctor [folder] [options]
+    npx launch-doctor init [folder]     Create .launchdoctorignore and a GitHub Actions workflow
 
   ${bold('Options')}
     --domain <domain>   Domain you send email from (checks SPF / DKIM / DMARC)
@@ -138,7 +140,19 @@ function fail(message: string): never {
   process.exit(2);
 }
 
+function init(argv: string[]): void {
+  const extra = argv.filter((a) => a.startsWith('-'));
+  if (extra.length) fail(`init doesn't take options (got ${extra.join(' ')})`);
+  if (argv.length > 1) fail('init takes at most one folder');
+  const root = resolve(argv[0] ?? '.');
+  if (!existsSync(root) || !statSync(root).isDirectory()) fail(`Folder not found: ${root}`);
+  const { created, skipped } = runInit(root);
+  for (const f of created) process.stdout.write(`  created  ${f}\n`);
+  for (const f of skipped) process.stdout.write(`  skipped  ${f} ${dim('(already exists)')}\n`);
+}
+
 async function main(): Promise<void> {
+  if (process.argv[2] === 'init') return init(process.argv.slice(3));
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     process.stdout.write(HELP);

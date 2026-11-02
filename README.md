@@ -118,7 +118,7 @@ Category ids for `--only` and `--skip`: `secrets`, `database`, `payments`, `cost
 
 ## Use it in CI
 
-Block a deploy when something critical slips in:
+Block a deploy when something critical slips in. `npx launch-doctor init` creates this workflow for you, plus a commented `.launchdoctorignore` (it never overwrites existing files):
 
 ```yaml
 # .github/workflows/launch-doctor.yml
