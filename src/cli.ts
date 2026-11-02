@@ -6,6 +6,7 @@ import { renderFixes } from './fixes.js';
 import { failingFindings } from './grade.js';
 import { CATEGORY_IDS, runDoctor } from './index.js';
 import { bold, dim, renderReport } from './report.js';
+import { renderSarif } from './sarif.js';
 import { renderStepSummary } from './summary.js';
 import type { Severity } from './types.js';
 import { version } from './version.js';
@@ -21,6 +22,7 @@ const HELP = `
     --out <file>        Where to save the fix prompts (default: LAUNCH_FIXES.md in the project)
     --no-file           Don't write the fix prompts file
     --json              Print the full report as JSON (no fix file unless --out is given)
+    --sarif <file>      Also write a SARIF 2.1.0 file (for GitHub code scanning)
     --offline           Skip network checks
     --ci                Exit with code 1 if there are critical issues (no fix file unless --out)
     --fail-on <level>   With --ci, the lowest severity that fails: critical (default) or warning
@@ -57,6 +59,7 @@ interface Args {
   failOn: Severity;
   only?: string[];
   skip?: string[];
+  sarif?: string;
   demo: boolean;
   help: boolean;
   version: boolean;
@@ -88,6 +91,8 @@ function parseArgs(argv: string[]): Args {
     else if (a.startsWith('--only=')) args.only = categoriesArg('--only', a.slice(7));
     else if (a === '--skip') args.skip = categoriesArg(a, value());
     else if (a.startsWith('--skip=')) args.skip = categoriesArg('--skip', a.slice(7));
+    else if (a === '--sarif') args.sarif = value();
+    else if (a.startsWith('--sarif=')) args.sarif = a.slice(8);
     else if (a === '--out') args.out = value();
     else if (a.startsWith('--out=')) args.out = a.slice(6);
     else if (a.startsWith('-')) fail(`Unknown option ${a}. Run with --help to see the options.`);
@@ -170,6 +175,16 @@ async function main(): Promise<void> {
       fixFile = rel && !rel.startsWith('..') ? rel : target;
     } catch (err) {
       process.stderr.write(`${dim(`Couldn't write ${target}: ${(err as Error).message}`)}\n`);
+    }
+  }
+
+  if (args.sarif) {
+    const sarifPath = isAbsolute(args.sarif) ? args.sarif : resolve(process.cwd(), args.sarif);
+    const fallbackUri = ['package.json', 'pyproject.toml', 'requirements.txt', 'README.md'].find((f) => existsSync(join(root, f)));
+    try {
+      writeFileSync(sarifPath, renderSarif(report, { fallbackUri }));
+    } catch (err) {
+      fail(`Couldn't write ${sarifPath}: ${(err as Error).message}`);
     }
   }
 

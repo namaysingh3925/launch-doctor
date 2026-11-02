@@ -103,6 +103,7 @@ npx launch-doctor [folder] [options]
   --out <file>        Where to save the fix prompts (default: LAUNCH_FIXES.md)
   --no-file           Don't write the fix prompts file
   --json              Print the full report as JSON
+  --sarif <file>      Also write a SARIF 2.1.0 file (for GitHub code scanning)
   --offline           Skip network checks
   --ci                Exit with code 1 if there are critical issues
   --fail-on <level>   With --ci, the lowest severity that fails: critical (default) or warning
@@ -133,6 +134,16 @@ jobs:
 ```
 
 On GitHub Actions, Launch Doctor also adds a summary (grade, category table, and every critical and warning with its file and line) to the job's summary page, using the `GITHUB_STEP_SUMMARY` file that Actions provides. No setup is needed.
+
+To see findings as code-scanning alerts in the GitHub Security tab, write SARIF and upload it:
+
+```yaml
+      - run: npx launch-doctor --sarif launch-doctor.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: launch-doctor.sarif
+```
 
 By default `--ci` fails only on critical issues. Use `--fail-on warning` to fail on warnings too.
 `--ci` and `--json` don't write `LAUNCH_FIXES.md` unless you pass `--out`.

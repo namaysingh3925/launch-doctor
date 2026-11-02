@@ -151,3 +151,33 @@ test('no summary file is written when GITHUB_STEP_SUMMARY is not set', () => {
   assert.equal(res.status, 0);
   assert.equal(process.env.GITHUB_STEP_SUMMARY, undefined);
 });
+
+test('--sarif writes SARIF 2.1.0 with one rule per finding id and one result per finding', () => {
+  const dir = leaky();
+  const sarifPath = join(dir, 'out.sarif');
+  const res = run([dir, '--offline', '--no-file', '--sarif', sarifPath]);
+  assert.equal(res.status, 0, res.stderr);
+  const sarif = JSON.parse(readFileSync(sarifPath, 'utf8'));
+  assert.equal(sarif.version, '2.1.0');
+  assert.match(sarif.$schema, /sarif-2\.1\.0/);
+  const runEntry = sarif.runs[0];
+  assert.equal(runEntry.tool.driver.name, 'Launch Doctor');
+  const ruleIds = runEntry.tool.driver.rules.map((r: { id: string }) => r.id);
+  assert.equal(new Set(ruleIds).size, ruleIds.length, 'rule ids are unique');
+
+  const report = JSON.parse(run([dir, '--offline', '--json']).stdout);
+  const findings = report.categories.flatMap((c: { findings: unknown[] }) => c.findings);
+  assert.equal(runEntry.results.length, findings.length);
+
+  const key = runEntry.results.find((r: { ruleId: string }) => r.ruleId === 'stripe-live-key');
+  assert.equal(key.level, 'error');
+  assert.equal(key.locations[0].physicalLocation.artifactLocation.uri, 'src/pay.ts');
+  assert.equal(key.locations[0].physicalLocation.region.startLine, 1);
+  assert.equal(runEntry.tool.driver.rules[key.ruleIndex].id, 'stripe-live-key');
+  const rule = runEntry.tool.driver.rules[key.ruleIndex];
+  assert.match(rule.shortDescription.text, /Stripe live secret key/);
+  assert.match(rule.help.text, /Prompt to paste/);
+  assert.ok(runEntry.results.some((r: { level: string }) => r.level === 'warning'));
+  for (const r of runEntry.results) assert.ok(r.locations[0].physicalLocation.artifactLocation.uri, 'every result has a location');
+  assert.match(run(['--help']).stdout, /--sarif <file>/);
+});
