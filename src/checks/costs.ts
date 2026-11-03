@@ -1,5 +1,6 @@
 import { AUTH_CHECK_RE } from '../detect.js';
-import type { SourceFile } from '../project.js';
+import type { ProjectContext, SourceFile } from '../project.js';
+import { authIsUsed, evidenceOf, handlersOf, matcherCovers, type RouteHandler } from '../routes.js';
 import type { Check } from '../types.js';
 import { lineTextAt, uniqueBy } from '../util.js';
 import { appCode, at, clientCode, emptyOutput, isRouteLike, notApplicable, serverCode, where } from './common.js';
@@ -96,6 +97,16 @@ export function middlewareBlocksApi(f: SourceFile, code = f.content): boolean {
   });
 }
 
+/** Does a middleware file with this kind of code run on the handler's URL path? */
+function middlewareCovers(ctx: ProjectContext, h: RouteHandler, pattern: RegExp): boolean {
+  return ctx.files.some((f) => {
+    if (!/(^|\/)(?:src\/)?(middleware|proxy)\.(t|j)s$/.test(f.path)) return false;
+    const code = ctx.codeOf(f);
+    if (!pattern.test(code)) return false;
+    return matcherCovers(matcherEntries(code), h.urlPath) !== false;
+  });
+}
+
 export const costsCheck: Check = {
   id: 'costs',
   name: 'AI & API costs',
@@ -137,8 +148,16 @@ export const costsCheck: Check = {
 
     // 2. AI endpoints that anyone can call
     const middlewareProtects = ctx.files.some((f) => middlewareBlocksApi(f, ctx.codeOf(f)));
+    // Route files with exported handlers are judged one handler at a time (what the handler itself,
+    // or the local modules it imports, does). Everything else keeps the older whole-file check.
+    const handlers = ctx.files.filter((f) => server(f) && isRouteLike(f)).flatMap((f) => handlersOf(ctx, f));
+    const analysed = new Set(handlers.map((h) => h.file.path));
+    const aiHandlers = handlers.filter((h) => AI_CALL.test(evidenceOf(ctx, h).calls));
+    const unprotectedHandlers = aiHandlers.filter(
+      (h) => !authIsUsed(AUTH_CHECK_RE, evidenceOf(ctx, h)) && !middlewareCovers(ctx, h, MIDDLEWARE_BLOCKS),
+    );
     const aiRoutes = uniqueBy(
-      ctx.find(AI_CALL, (f) => server(f) && isRouteLike(f)),
+      ctx.find(AI_CALL, (f) => server(f) && isRouteLike(f) && !analysed.has(f.path)),
       (m) => m.file.path,
     );
     const unprotected = middlewareProtects ? [] : aiRoutes.filter((m) => !AUTH_CHECK_RE.test(ctx.codeOf(m.file)));
@@ -154,12 +173,34 @@ export const costsCheck: Check = {
           `using the auth system my app already has. Also cap the size of the input and set a max tokens / max output limit on the AI call.`,
       });
     }
-    if (aiRoutes.length && !unprotected.length) out.passed.push('AI endpoints check who is calling');
+    for (const h of unprotectedHandlers.slice(0, 3)) {
+      const loc = { file: h.file.path, line: h.line };
+      out.findings.push({
+        id: 'ai-endpoint-no-auth',
+        severity: 'warning',
+        title: `Paid API endpoint doesn't check who is calling it (${h.method} ${h.urlPath ?? h.file.path})`,
+        why: 'Anyone on the internet can call this endpoint over and over, and every call is billed to you. Only signed-in users (or a paid plan) should be able to use it.',
+        location: loc,
+        fixPrompt:
+          `The ${h.method} handler in ${where(loc)} reaches a paid AI API but doesn't reject callers who aren't signed in. Please add a check at the top that returns 401 when there is no signed-in user, ` +
+          `using the auth system my app already has (checking the result, not just calling it). Also cap the size of the input and set a max tokens / max output limit on the AI call.`,
+      });
+    }
+    if ((aiRoutes.length || aiHandlers.length) && !unprotected.length && !unprotectedHandlers.length)
+      out.passed.push('AI endpoints check who is calling');
 
     // 3. Rate limiting: an imported rate-limit package, or code that really sets up a limiter.
     // (Comments and "RateLimitError" handling don't count.)
-    const rateLimited =
+    const projectRateLimited =
       RATE_LIMIT_PACKAGES.some((p) => ctx.imported(p)) || ctx.findCode(RATE_LIMIT_USAGE, server, 1).length > 0;
+    // With analysed handlers, a limiter only counts for a handler that can reach it (or that middleware covers).
+    const limitedHere = (h: RouteHandler): boolean =>
+      RATE_LIMIT_USAGE.test(evidenceOf(ctx, h).scope) || middlewareCovers(ctx, h, RATE_LIMIT_USAGE);
+    const unlimitedHandlers = aiHandlers.filter((h) => !limitedHere(h));
+    const legacyAiRoutes = aiRoutes.length > 0;
+    const rateLimited = aiHandlers.length
+      ? unlimitedHandlers.length === 0 && (!legacyAiRoutes || projectRateLimited)
+      : projectRateLimited;
     if (rateLimited) {
       out.passed.push('Rate limiting is in place');
     } else {

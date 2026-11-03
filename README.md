@@ -323,6 +323,7 @@ Launch Doctor provides rapid pre-launch hygiene, not a full penetration test or 
 - It uses pattern analysis and heuristic inspection; it may occasionally flag safe code or miss complex multi-file logic. Use `.launchdoctorignore` or inline comments where appropriate.
 - It cannot inspect third-party web dashboards. Settings configured via web consoles in Supabase, Firebase, Stripe, or cloud hosts appear on the "check yourself" manual checklist.
 - JavaScript, TypeScript, and Python codebases receive the deepest static analysis coverage.
+- Route analysis works per handler and follows local imports 2 levels deep. Dynamic imports and unusual route shapes may not be followed.
 
 For applications processing significant financial transactions or sensitive personal health data, combine automated checks with a human security review.
 
