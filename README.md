@@ -339,6 +339,15 @@ For applications processing significant financial transactions or sensitive pers
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for local environment setup, architecture notes, and instructions on creating new checks. All contributors are expected to adhere to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+## Contributors
+
+Thanks to everyone who has helped build Launch Doctor. Contributors are listed here once their pull request is merged.
+
+- [@namaysingh3925](https://github.com/namaysingh3925): creator and maintainer
+- [@SHARAJ379](https://github.com/SHARAJ379): route-aware analysis of AI endpoints (#4)
+
+Want to be on this list? Pick an open issue labelled `good first issue` or `help wanted`.
+
 ## Security
 
 Please do not report security vulnerabilities in public issues. Refer to [SECURITY.md](SECURITY.md) for instructions on confidential disclosure.
