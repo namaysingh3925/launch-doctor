@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-04
+
 ### Added
 
 - `launch-doctor scan <url>` checks a deployed site from the outside: downloadable `.env`, `.git` and SQL backups, public source maps, API keys in the JavaScript, Supabase tables readable with the public key, and HTTPS and security headers. `--no-db` skips the Supabase test.
@@ -61,5 +63,6 @@ First release.
 - `.launchdoctorignore` for silencing findings by id or skipping paths.
 - Support for JavaScript / TypeScript and Python projects.
 
-[Unreleased]: https://github.com/namaysingh3925/launch-doctor/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/namaysingh3925/launch-doctor/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/namaysingh3925/launch-doctor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/namaysingh3925/launch-doctor/releases/tag/v0.1.0

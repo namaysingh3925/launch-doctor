@@ -1,6 +1,6 @@
 {
   "name": "launch-doctor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A pre-launch checkup for vibe-coded apps. Grades your project A-F on secrets, database safety, payments, AI costs, email, error tracking, legal pages and first impressions, with a copy-paste fix prompt for every issue.",
   "type": "module",
   "bin": {
