@@ -63,6 +63,8 @@ export interface CategoryResult extends CheckOutput {
 
 export interface Report {
   tool: 'launch-doctor';
+  /** 'live' for `launch-doctor scan <url>`; absent for a project folder scan. */
+  mode?: 'live';
   version: string;
   root: string;
   projectName: string;

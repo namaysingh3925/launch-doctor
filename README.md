@@ -166,6 +166,18 @@ flowchart LR
 
 Each category also adds **"check yourself"** items for things code cannot show, such as automated database backups, provider spending limits, a real test purchase, and uptime monitoring. Monitoring, legal, and first impressions checks only run on web apps (a frontend framework, server routes, or an `index.html`). Command-line tools and libraries skip them automatically.
 
+## Live site scan
+
+`npx launch-doctor scan https://myapp.com` checks your deployed site the way an attacker would, from the outside. It makes about 40 ordinary `GET` requests and never changes anything. Only scan sites you own or are allowed to test.
+
+| Category | What it catches | Severity range |
+|---|---|---|
+| Exposed files & keys (`live-exposure`) | `/.env`, `/.git` and SQL backups that can be downloaded (the content is verified, so single-page apps that answer 200 for every path are not flagged); public source maps; API keys inside the JavaScript every visitor downloads | Warning to critical |
+| Open database (`live-database`) | Supabase `service_role` key in the page; tables that return rows to anyone holding the public anon key (only `GET`, one row per table, and rows are never saved or shown) | Critical |
+| HTTPS & headers (`live-headers`) | Plain http; http that doesn't redirect to https; missing HSTS, Content-Security-Policy, `X-Content-Type-Options`, frame protection and `Referrer-Policy` | Warning to critical |
+
+The report uses the same grades and `--json`, `--ci`, `--fail-on`, `--out` and `--no-file` options. Fix prompts go to `LAUNCH_FIXES_LIVE.md` in the current folder. Run `npx launch-doctor scan --help` for the options.
+
 ## Grading
 
 - **Category score** = 100 − 50 per critical finding − 15 per warning.
@@ -185,6 +197,7 @@ Each category also adds **"check yourself"** items for things code cannot show, 
 ```
 npx launch-doctor [folder] [options]
 npx launch-doctor init [folder]
+npx launch-doctor scan <url> [options]
 ```
 
 | Flag | Default | Description |
@@ -208,6 +221,8 @@ npx launch-doctor init [folder]
 | `-h`, `--help` | | Show help |
 | `-v`, `--version` | | Show the version |
 | `init [folder]` | `.` | Create `.launchdoctorignore` and `.github/workflows/launch-doctor.yml` (never overwrites) |
+| `scan <url>` | | Check your deployed site from the outside (see [Live site scan](#live-site-scan)) |
+| `--no-db` | off | With `scan`, don't test Supabase tables with the public key found in the page |
 
 Category ids for `--only` and `--skip`: `secrets`, `database`, `payments`, `costs`, `email`, `monitoring`, `legal`, `first-impressions`. Skipped categories show as "skipped" and don't count toward the grade.
 
@@ -313,6 +328,7 @@ Fix the issues in LAUNCH_FIXES.md one at a time, starting with the critical ones
 Launch Doctor analyzes your codebase locally on your device. Your source code, findings, and credentials are never uploaded to any remote server. Detected secrets are masked in reports (for example, `sk_live_…exe9`).
 
 - **Email DNS validation:** This is the only network check performed. When your project sends transactional email and a domain is identified (either discovered in code or specified via `--domain`), Launch Doctor queries your system DNS resolver for NS and TXT records (including root SPF, `send.<domain>`, `_dmarc.<domain>`, and common DKIM selectors). No code or private data is transmitted. Pass `--offline` to disable DNS lookups entirely. The `--demo` command never touches the network.
+- **Live site scan (`scan <url>`):** sends ordinary `GET` requests to the address you give and to Supabase when your page uses it. Nothing is sent anywhere else, and nothing is uploaded.
 - **Git history analysis (`--history`):** Runs local `git log` commands directly on your system without network requests.
 - **Package installation:** standard `npx` retrieval via the npm registry.
 
@@ -329,7 +345,7 @@ For applications processing significant financial transactions or sensitive pers
 
 ## Roadmap
 
-- [ ] Live URL inspection (exposed `.env`, source maps, security headers, open Supabase tables via anonymous key)
+- [x] Live URL inspection (`launch-doctor scan <url>`: exposed `.env`, source maps, security headers, open Supabase tables via anonymous key)
 - [ ] GitHub Action bot to post interactive review comments on pull requests
 - [ ] Model Context Protocol (MCP) server for direct Claude Code and Cursor integration
 - [ ] Extended provider coverage (Clerk, Convex, Appwrite, Lemon Squeezy, Paddle)

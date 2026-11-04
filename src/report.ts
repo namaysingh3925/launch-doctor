@@ -70,7 +70,8 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
 
   lines.push(`  ${bold('Launch Doctor')} ${dim(`v${report.version}`)}`);
   const stack = report.stack.length ? ` · ${report.stack.join(', ')}` : '';
-  lines.push(`  ${dim(`Checked ${report.projectName} · ${plural(report.filesScanned, 'file')}${stack}`)}`);
+  const unit = report.mode === 'live' ? 'request' : 'file';
+  lines.push(`  ${dim(`Checked ${report.projectName} · ${plural(report.filesScanned, unit)}${stack}`)}`);
   if (report.truncated) lines.push(`  ${yellow('Very large project: only the first 20,000 files were checked.')}`);
   lines.push('');
   lines.push(`  ${bold('Overall grade')}  ${badge(report.grade)}   ${report.verdict}`);

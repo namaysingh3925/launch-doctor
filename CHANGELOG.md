@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `launch-doctor scan <url>` checks a deployed site from the outside: downloadable `.env`, `.git` and SQL backups, public source maps, API keys in the JavaScript, Supabase tables readable with the public key, and HTTPS and security headers. `--no-db` skips the Supabase test.
 - AI endpoints are now judged one handler at a time: auth and rate limiting must be reachable from that handler, including through local imports.
 - `--fail-on <critical|warning>` chooses the lowest severity that makes `--ci` exit with code 1.
 - Inline ignores: a `launch-doctor-ignore <id>` comment on a finding's line or the line above silences that one finding (`//`, `#`, `/* */`, `<!-- -->` and SQL `--` comments).
