@@ -22,7 +22,7 @@ export function renderStepSummary(report: Report): string {
   const out: string[] = [
     `## Launch Doctor: grade ${report.grade}`,
     '',
-    `**${escapeCell(report.verdict)}** · ${report.projectName} · ${report.filesScanned} files checked`,
+    `**${escapeCell(report.verdict)}** · ${report.projectName} · ${report.filesScanned} ${report.mode === 'live' ? 'requests' : 'files'} checked`,
     '',
     '| Category | Grade | Critical | Warnings | To check |',
     '|---|:---:|---:|---:|---:|',

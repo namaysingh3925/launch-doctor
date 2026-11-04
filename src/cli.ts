@@ -8,6 +8,7 @@ import { failingFindings } from './grade.js';
 import { DEFAULT_HISTORY_DEPTH } from './history.js';
 import { CATEGORY_IDS, runDoctor } from './index.js';
 import { runInit } from './init.js';
+import { runLiveScan } from './live.js';
 import { bold, dim, renderReport } from './report.js';
 import { renderSarif } from './sarif.js';
 import { renderStepSummary } from './summary.js';
@@ -20,6 +21,7 @@ const HELP = `
   ${bold('Usage')}
     npx launch-doctor [folder] [options]
     npx launch-doctor init [folder]     Create .launchdoctorignore and a GitHub Actions workflow
+    npx launch-doctor scan <url>        Check your deployed site (exposed files, source maps, open Supabase tables, headers)
 
   ${bold('Options')}
     --domain <domain>     Domain you send email from (checks SPF / DKIM / DMARC)
@@ -39,6 +41,9 @@ const HELP = `
     --demo                Scan a built-in sample app full of mistakes
     -h, --help            Show this help
     -v, --version         Show the version
+
+  ${bold('Live site')}
+    npx launch-doctor scan <url> --no-db   Run "launch-doctor scan --help" for the options
 
   ${bold('Categories')}
     ${CATEGORY_IDS().join(', ')}
@@ -184,8 +189,103 @@ function init(argv: string[]): void {
   for (const f of skipped) process.stdout.write(`  skipped  ${f} ${dim('(already exists)')}\n`);
 }
 
+const SCAN_HELP = `
+  ${bold('launch-doctor scan')} - check your deployed site from the outside
+
+  ${bold('Usage')}
+    npx launch-doctor scan <url> [options]
+
+  ${bold('Options')}
+    --out <file>          Where to save the fix prompts (default: LAUNCH_FIXES_LIVE.md in the current folder)
+    --no-file             Don't write the fix prompts file
+    --json                Print the full report as JSON
+    --ci                  Exit with code 1 on findings at or above --fail-on
+    --fail-on <level>     With --ci, the lowest severity that fails: critical (default) or warning
+    --no-db               Don't test Supabase tables with the public key found in the page
+    -h, --help            Show this help
+
+  Only scan sites you own or are allowed to test. The scan makes about 40 ordinary GET requests
+  and never changes anything. Database rows are never saved or shown.
+`;
+
+async function scan(argv: string[]): Promise<void> {
+  let url: string | undefined;
+  let out: string | undefined;
+  let writeFile = true;
+  let json = false;
+  let ci = false;
+  let failOn: Severity = 'critical';
+  let skipDatabase = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]!;
+    const value = () => {
+      const v = argv[++i];
+      if (!v || v.startsWith('--')) fail(`${a} needs a value`);
+      return v!;
+    };
+    if (a === '-h' || a === '--help') {
+      process.stdout.write(SCAN_HELP);
+      return;
+    }
+    if (a === '--json') json = true;
+    else if (a === '--ci') ci = true;
+    else if (a === '--no-file') writeFile = false;
+    else if (a === '--no-db') skipDatabase = true;
+    else if (a === '--out') out = value();
+    else if (a.startsWith('--out=')) out = a.slice(6);
+    else if (a === '--fail-on') failOn = severityArg(value());
+    else if (a.startsWith('--fail-on=')) failOn = severityArg(a.slice(10));
+    else if (a.startsWith('-')) fail(`Unknown option ${a}. Run "launch-doctor scan --help" to see the options.`);
+    else if (!url) url = a;
+    else fail(`Unexpected argument ${a}`);
+  }
+  if (!url) fail('scan needs a web address, for example: npx launch-doctor scan https://myapp.com');
+  if ((json || ci) && !out) writeFile = false;
+
+  let report: Report;
+  try {
+    report = await runLiveScan(url!, { skipDatabase });
+  } catch (err) {
+    fail((err as Error).message);
+  }
+
+  let fixFile: string | undefined;
+  const hasSomething = report.counts.critical + report.counts.warning > 0;
+  if (writeFile && hasSomething) {
+    const target = out ? resolve(process.cwd(), out) : resolve(process.cwd(), 'LAUNCH_FIXES_LIVE.md');
+    try {
+      writeFileSync(target, renderFixes(report));
+      const rel = relative(process.cwd(), target);
+      fixFile = rel && !rel.startsWith('..') ? rel : target;
+    } catch (err) {
+      process.stderr.write(`${dim(`Couldn't write ${target}: ${(err as Error).message}`)}
+`);
+    }
+  }
+
+  const stepSummary = process.env.GITHUB_STEP_SUMMARY;
+  if (stepSummary) {
+    try {
+      appendFileSync(
+        stepSummary,
+        `${renderStepSummary(report)}
+`,
+      );
+    } catch {
+      // the summary is optional
+    }
+  }
+
+  if (json)
+    process.stdout.write(`${JSON.stringify(report, null, 2)}
+`);
+  else process.stdout.write(renderReport(report, { fixFile }));
+  if (ci && failingFindings(report, failOn).length > 0) process.exitCode = 1;
+}
+
 async function main(): Promise<void> {
   if (process.argv[2] === 'init') return init(process.argv.slice(3));
+  if (process.argv[2] === 'scan') return scan(process.argv.slice(3));
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     process.stdout.write(HELP);
