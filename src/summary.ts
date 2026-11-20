@@ -1,13 +1,28 @@
 import { shortWhere } from './checks/common.js';
 import type { Finding, Report } from './types.js';
 
-function escapeCell(text: string): string {
+export function escapeCell(text: string): string {
   return text.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 }
 
 function findingLine(f: Finding): string {
   const where = f.location ? ` (\`${shortWhere(f.location)}\`)` : '';
   return `- ${escapeCell(f.title)}${where}`;
+}
+
+/** The per-category Markdown table shared by the job summary and the pull request comment. */
+export function categoryTable(report: Report): string[] {
+  const out = ['| Category | Grade | Critical | Warnings | To check |', '|---|:---:|---:|---:|---:|'];
+  for (const c of report.categories) {
+    if (c.skipped || !c.applicable) {
+      out.push(`| ${c.name} | - | | | ${c.skipped ? 'skipped' : escapeCell(c.note ?? 'not used')} |`);
+      continue;
+    }
+    const crit = c.findings.filter((f) => f.severity === 'critical').length;
+    const warn = c.findings.filter((f) => f.severity === 'warning').length;
+    out.push(`| ${c.name} | ${c.grade ?? '-'} | ${crit} | ${warn} | ${c.manual.length} |`);
+  }
+  return out;
 }
 
 /**
@@ -24,19 +39,9 @@ export function renderStepSummary(report: Report): string {
     '',
     `**${escapeCell(report.verdict)}** · ${report.projectName} · ${report.filesScanned} ${report.mode === 'live' ? 'requests' : 'files'} checked`,
     '',
-    '| Category | Grade | Critical | Warnings | To check |',
-    '|---|:---:|---:|---:|---:|',
+    ...categoryTable(report),
+    '',
   ];
-  for (const c of report.categories) {
-    if (c.skipped || !c.applicable) {
-      out.push(`| ${c.name} | - | | | ${c.skipped ? 'skipped' : escapeCell(c.note ?? 'not used')} |`);
-      continue;
-    }
-    const crit = c.findings.filter((f) => f.severity === 'critical').length;
-    const warn = c.findings.filter((f) => f.severity === 'warning').length;
-    out.push(`| ${c.name} | ${c.grade ?? '-'} | ${crit} | ${warn} | ${c.manual.length} |`);
-  }
-  out.push('');
 
   if (critical.length) {
     out.push(`### Critical (${critical.length})`, '', ...critical.map(findingLine), '');

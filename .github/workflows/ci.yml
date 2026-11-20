@@ -49,6 +49,27 @@ jobs:
       - name: Self-scan
         run: node dist/src/cli.js . --ci --no-file --offline
 
+  action:
+    name: GitHub Action on this pull request
+    needs: lint
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./
+        id: doctor
+        with:
+          args: --offline
+      - name: Check the outputs are set
+        env:
+          GRADE: ${{ steps.doctor.outputs.grade }}
+        run: |
+          echo "Launch Doctor grade: $GRADE"
+          case "$GRADE" in A | B | C | D | F) ;; *) echo "::error::no grade output"; exit 1 ;; esac
+
   package:
     name: Package contents
     needs: test

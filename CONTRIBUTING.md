@@ -44,9 +44,12 @@ src/
   fixes.ts        LAUNCH_FIXES.md
   sarif.ts        --sarif output
   summary.ts      GitHub Actions job summary
+  github.ts       --pr-comment: pull request summary comment and inline review comments
+  live.ts         `launch-doctor scan <url>`
   init.ts         files created by `launch-doctor init`
   demo.ts         the sample project used by --demo
 test/             node:test tests; projects are built in temp folders
+action.yml        the GitHub Action (builds from source, then runs the CLI with --pr-comment)
 ```
 
 ## Adding a check, step by step

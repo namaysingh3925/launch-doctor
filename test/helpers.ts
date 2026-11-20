@@ -6,6 +6,8 @@ import type { Report } from '../src/types.js';
 
 // Tests spawn the CLI with process.env. On GitHub Actions that would write test runs into the real job summary.
 delete process.env.GITHUB_STEP_SUMMARY;
+delete process.env.GITHUB_OUTPUT;
+delete process.env.GITHUB_EVENT_NAME;
 
 /** Create a throwaway project folder from a { path: content } map. */
 export function makeProject(files: Record<string, string>): string {

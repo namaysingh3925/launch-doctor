@@ -208,6 +208,7 @@ npx launch-doctor scan <url> [options]
 | `--no-file` | off | Don't write the fix prompts file |
 | `--json` | off | Print the full report as JSON (no fix file unless `--out` is given) |
 | `--sarif <file>` | off | Also write a SARIF 2.1.0 file for GitHub code scanning |
+| `--pr-comment` | off | On a GitHub pull request, post a summary comment and inline fix prompts (see [Pull request comments](#pull-request-comments)) |
 | `--offline` | off | Skip network checks (email DNS) |
 | `--ci` | off | Exit with code 1 on findings at or above `--fail-on` (no fix file unless `--out`) |
 | `--fail-on <level>` | `critical` | With `--ci`, the lowest severity that fails: `critical` or `warning` |
@@ -294,6 +295,7 @@ jobs:
 
 - **Severity gating:** By default, `--ci` exits with code 1 only on critical findings. Add `--fail-on warning` to fail builds on warnings as well.
 - **Job summaries:** When running in GitHub Actions, Launch Doctor automatically writes a markdown summary (including overall grade, category scorecard, and itemized issues with file and line links) to the GitHub Actions job summary tab via `GITHUB_STEP_SUMMARY`.
+- **Step outputs:** When `GITHUB_OUTPUT` is set, the `grade`, `score`, `critical` and `warnings` values are saved as step outputs.
 - **Code scanning alerts:** Export findings to SARIF 2.1.0 format to populate alerts directly in your repository Security tab:
 
 ```yaml
@@ -303,6 +305,40 @@ jobs:
         with:
           sarif_file: launch-doctor.sarif
 ```
+
+### Pull request comments
+
+The Launch Doctor GitHub Action reviews each pull request like a teammate would:
+
+- **Inline comments** on the lines the pull request adds, each with the plain-English risk, a fix prompt you can paste into your AI tool, and the `launch-doctor-ignore` comment that silences it.
+- **One summary comment** with the grade, what this pull request added, what was already in the project, and the category scorecard. It is edited in place on every push, not posted again.
+- Findings that were already commented on are not repeated, findings in `.launchdoctor-baseline.json` are left out, and each run posts at most 20 inline comments (the rest are listed in the summary).
+
+```yaml
+name: Launch Doctor
+on: [pull_request]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: namaysingh3925/launch-doctor@v0
+```
+
+| Input | Default | Description |
+|---|---|---|
+| `path` | `.` | Folder to check, relative to the repository root |
+| `fail-on` | `critical` | Lowest severity that fails the check: `critical`, `warning` or `never` |
+| `comment` | `true` | Post the summary and inline comments on pull requests |
+| `args` | | Extra options, for example `--offline --skip legal` |
+| `github-token` | `${{ github.token }}` | Token used for the comments |
+
+The action also sets the `grade`, `score`, `critical` and `warnings` outputs. Pull requests from forks get a read-only token, so they can't be commented on; the check still runs and the job summary still has the results.
+
+Using the CLI directly instead? Add `--pr-comment` and pass the token: `npx launch-doctor --ci --pr-comment` with `env: GITHUB_TOKEN: ${{ github.token }}`.
 
 ## Using with AI coding tools
 
@@ -330,6 +366,7 @@ Launch Doctor analyzes your codebase locally on your device. Your source code, f
 - **Email DNS validation:** This is the only network check performed. When your project sends transactional email and a domain is identified (either discovered in code or specified via `--domain`), Launch Doctor queries your system DNS resolver for NS and TXT records (including root SPF, `send.<domain>`, `_dmarc.<domain>`, and common DKIM selectors). No code or private data is transmitted. Pass `--offline` to disable DNS lookups entirely. The `--demo` command never touches the network.
 - **Live site scan (`scan <url>`):** sends ordinary `GET` requests to the address you give and to Supabase when your page uses it. Nothing is sent anywhere else, and nothing is uploaded.
 - **Git history analysis (`--history`):** Runs local `git log` commands directly on your system without network requests.
+- **Pull request comments (`--pr-comment`):** calls the GitHub API with the workflow's token to read the pull request's changed files and post comments. It only runs on GitHub Actions and sends finding titles, explanations, fix prompts and file paths, never your source code.
 - **Package installation:** standard `npx` retrieval via the npm registry.
 
 ## Limitations
@@ -346,7 +383,7 @@ For applications processing significant financial transactions or sensitive pers
 ## Roadmap
 
 - [x] Live URL inspection (`launch-doctor scan <url>`: exposed `.env`, source maps, security headers, open Supabase tables via anonymous key)
-- [ ] GitHub Action bot to post interactive review comments on pull requests
+- [x] GitHub Action that posts a summary and inline fix prompts on pull requests ([Pull request comments](#pull-request-comments))
 - [ ] Model Context Protocol (MCP) server for direct Claude Code and Cursor integration
 - [ ] Extended provider coverage (Clerk, Convex, Appwrite, Lemon Squeezy, Paddle)
 - [ ] Mobile framework support (Expo, React Native)

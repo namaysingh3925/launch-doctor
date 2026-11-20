@@ -4,6 +4,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { applyBaseline, BASELINE_FILE, loadBaseline, writeBaseline } from './baseline.js';
 import { createDemoProject } from './demo.js';
 import { renderFixes } from './fixes.js';
+import { explainGitHubError, postPrFeedback, prContextFromEnv } from './github.js';
 import { failingFindings } from './grade.js';
 import { DEFAULT_HISTORY_DEPTH } from './history.js';
 import { CATEGORY_IDS, runDoctor } from './index.js';
@@ -29,6 +30,7 @@ const HELP = `
     --no-file             Don't write the fix prompts file
     --json                Print the full report as JSON (no fix file unless --out is given)
     --sarif <file>        Also write a SARIF 2.1.0 file (for GitHub code scanning)
+    --pr-comment          On a GitHub pull request, post a summary comment and inline fix prompts
     --offline             Skip network checks (email DNS)
     --ci                  Exit with code 1 on findings at or above --fail-on (no fix file unless --out)
     --fail-on <level>     With --ci, the lowest severity that fails: critical (default) or warning
@@ -54,6 +56,8 @@ const HELP = `
 
   ${bold('GitHub Actions')}
     When GITHUB_STEP_SUMMARY is set, a Markdown summary is added to the job summary page.
+    When GITHUB_OUTPUT is set, the grade, score and counts are saved as step outputs.
+    --pr-comment needs GITHUB_TOKEN and "permissions: pull-requests: write".
 
   ${bold('Examples')}
     npx launch-doctor
@@ -73,6 +77,7 @@ interface Args {
   only?: string[];
   skip?: string[];
   sarif?: string;
+  prComment: boolean;
   updateBaseline: boolean;
   baseline: boolean;
   history: boolean;
@@ -89,6 +94,7 @@ function parseArgs(argv: string[]): Args {
     offline: false,
     ci: false,
     failOn: 'critical',
+    prComment: false,
     updateBaseline: false,
     baseline: true,
     history: false,
@@ -110,6 +116,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--offline') args.offline = true;
     else if (a === '--ci') args.ci = true;
     else if (a === '--demo') args.demo = true;
+    else if (a === '--pr-comment') args.prComment = true;
     else if (a === '--no-file') args.writeFile = false;
     else if (a === '--update-baseline') args.updateBaseline = true;
     else if (a === '--no-baseline') args.baseline = false;
@@ -275,12 +282,49 @@ async function scan(argv: string[]): Promise<void> {
       // the summary is optional
     }
   }
+  writeStepOutputs(report);
 
   if (json)
     process.stdout.write(`${JSON.stringify(report, null, 2)}
 `);
   else process.stdout.write(renderReport(report, { fixFile }));
   if (ci && failingFindings(report, failOn).length > 0) process.exitCode = 1;
+}
+
+/** On GitHub Actions, save the grade and counts as step outputs (steps.<id>.outputs.grade and so on). */
+function writeStepOutputs(report: Report): void {
+  const file = process.env.GITHUB_OUTPUT;
+  if (!file) return;
+  const lines = [
+    `grade=${report.grade}`,
+    `score=${report.score}`,
+    `critical=${report.counts.critical}`,
+    `warnings=${report.counts.warning}`,
+  ];
+  try {
+    appendFileSync(file, `${lines.join('\n')}\n`);
+  } catch (err) {
+    process.stderr.write(`${dim(`Couldn't write the GitHub step outputs: ${(err as Error).message}`)}\n`);
+  }
+}
+
+/** --pr-comment: post the results to the pull request. Never fails the run; problems are explained on stderr. */
+async function commentOnPr(report: Report, root: string): Promise<void> {
+  const ctx = prContextFromEnv(root);
+  if (typeof ctx === 'string') {
+    process.stderr.write(`\n  ${dim(`--pr-comment: skipped, ${ctx}.`)}\n`);
+    return;
+  }
+  try {
+    const r = await postPrFeedback(report, ctx);
+    const parts = [`summary comment ${r.summary}`, `${r.posted} new inline comment${r.posted === 1 ? '' : 's'}`];
+    if (r.alreadyPosted) parts.push(`${r.alreadyPosted} already posted earlier`);
+    if (r.overLimit) parts.push(`${r.overLimit} more listed in the summary only`);
+    process.stderr.write(`\n  ${dim(`Pull request #${ctx.number}: ${parts.join(', ')}.`)}\n`);
+    if (r.inlineError) process.stderr.write(`  ${dim(r.inlineError)}\n`);
+  } catch (err) {
+    process.stderr.write(`\n  ${dim(explainGitHubError(err))}\n`);
+  }
 }
 
 async function main(): Promise<void> {
@@ -375,6 +419,9 @@ async function main(): Promise<void> {
       process.stderr.write(`${dim(`Couldn't write the GitHub step summary: ${(err as Error).message}`)}\n`);
     }
   }
+  writeStepOutputs(report);
+
+  if (args.prComment) await commentOnPr(report, root);
 
   if (args.json) process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   else process.stdout.write(renderReport(report, { fixFile }));
