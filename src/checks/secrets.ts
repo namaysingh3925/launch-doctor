@@ -1,6 +1,6 @@
 import { isCodeFile, isEnvPath, isRealEnvPath, type Match, type ProjectContext, type SourceFile } from '../project.js';
 import type { Check, Finding, Location, Severity } from '../types.js';
-import { decodeJwtPayload, looksLikePlaceholder, mask } from '../util.js';
+import { decodeJwtPayload, lineTextAt, looksLikePlaceholder, mask } from '../util.js';
 import { at, emptyOutput, where } from './common.js';
 
 interface KeyPattern {
@@ -148,7 +148,87 @@ const KEY_PATTERNS: KeyPattern[] = [
     envName: 'PRIVATE_KEY',
     rotate: 'wherever this key was created (Google Cloud, Firebase, Apple, etc.)',
   },
+  {
+    id: 'paddle-live-key',
+    name: 'Paddle live API key',
+    re: /\bpdl_live_apikey_[A-Za-z0-9_]{30,}/g,
+    severity: 'critical',
+    envName: 'PADDLE_API_KEY',
+    rotate: 'Paddle → Developer tools → Authentication → API keys',
+  },
+  {
+    id: 'paddle-sandbox-key',
+    name: 'Paddle sandbox API key',
+    re: /\bpdl_sdbx_apikey_[A-Za-z0-9_]{30,}/g,
+    severity: 'warning',
+    envName: 'PADDLE_API_KEY',
+    rotate: 'Paddle sandbox → Developer tools → Authentication → API keys',
+  },
+  {
+    id: 'convex-deploy-key',
+    name: 'Convex deploy key',
+    re: /\b(?:prod|preview|dev):[a-z0-9]+(?:-[a-z0-9]+)*(?::[a-z0-9-]+)?\|[A-Za-z0-9+/=_-]{30,}/g,
+    severity: 'critical',
+    envName: 'CONVEX_DEPLOY_KEY',
+    rotate: 'Convex dashboard → your deployment → Settings → Deploy keys',
+    mustLookRandom: 'mixed',
+  },
+  {
+    // Appwrite keys are long hex strings (newer ones start with "standard_"); passed to setKey() they are unmistakable.
+    id: 'appwrite-api-key',
+    name: 'Appwrite API key',
+    re: /(?<=\.setKey\(\s*["'`])(?:standard_)?[a-f0-9]{64,}(?=["'`])|\bstandard_[a-f0-9]{64,}/g,
+    severity: 'critical',
+    envName: 'APPWRITE_API_KEY',
+    rotate: 'Appwrite Console → your project → Overview → Integrations → API keys',
+    mustLookRandom: 'digits-letters',
+  },
 ];
+
+/**
+ * Clerk secret keys use the same sk_live_ / sk_test_ prefixes as Stripe. A key is Clerk's when
+ * its line says so (CLERK_SECRET_KEY, clerkClient...) or when the app uses Clerk and not Stripe.
+ */
+const CLERK_KEYS: Record<string, KeyPattern> = {
+  'stripe-live-key': {
+    id: 'clerk-secret-key',
+    name: 'Clerk secret key',
+    re: /\bsk_live_[0-9a-zA-Z]{20,}/g,
+    severity: 'critical',
+    envName: 'CLERK_SECRET_KEY',
+    rotate: 'Clerk Dashboard → API keys → Secret keys',
+  },
+  'stripe-test-key': {
+    id: 'clerk-test-secret-key',
+    name: 'Clerk development secret key',
+    re: /\bsk_test_[0-9a-zA-Z]{20,}/g,
+    severity: 'warning',
+    envName: 'CLERK_SECRET_KEY',
+    rotate: 'Clerk Dashboard → API keys → Secret keys (development instance)',
+  },
+};
+
+const STRIPE_PACKAGES = ['stripe', '@stripe/stripe-js', '@stripe/react-stripe-js'];
+
+/** The pattern to report a match as: Stripe's, unless the key turns out to be Clerk's. */
+function keyKind(ctx: ProjectContext, p: KeyPattern, m: Match): KeyPattern {
+  const clerk = CLERK_KEYS[p.id];
+  if (!clerk || !m.match[0].startsWith('sk_')) return p;
+  const line = lineTextAt(m.file.content, m.index);
+  if (/clerk/i.test(line)) return clerk;
+  if (/stripe/i.test(line)) return p;
+  return ctx.uses('@clerk/') && !ctx.usesAny(STRIPE_PACKAGES) ? clerk : p;
+}
+
+/** Not in KEY_PATTERNS: a Lemon Squeezy key is a JWT, so only its context tells it apart. */
+const LEMON_SQUEEZY_KEY: KeyPattern = {
+  id: 'lemonsqueezy-api-key',
+  name: 'Lemon Squeezy API key',
+  re: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
+  severity: 'critical',
+  envName: 'LEMONSQUEEZY_API_KEY',
+  rotate: 'Lemon Squeezy → Settings → API',
+};
 
 export interface KeyMatch {
   pattern: KeyPattern;
@@ -183,7 +263,7 @@ const JWT_RE = /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10
 
 const PUBLIC_VAR_RE = /\b(NEXT_PUBLIC_|VITE_|REACT_APP_|EXPO_PUBLIC_|NUXT_PUBLIC_|GATSBY_|PUBLIC_)([A-Z0-9_]+)/g;
 const SENSITIVE_PART =
-  /(SECRET|SERVICE_ROLE|PRIVATE|PASSWORD|PASSWD|OPENAI|ANTHROPIC|CLAUDE|GEMINI|GROQ|MISTRAL|DEEPSEEK|OPENROUTER|PERPLEXITY|REPLICATE|HUGGING|HF_TOKEN|COHERE|TOGETHER|ELEVENLABS|RESEND|SENDGRID|MAILGUN|POSTMARK|TWILIO_AUTH|AUTH_TOKEN|ACCESS_TOKEN|ADMIN_KEY)/;
+  /(SECRET|SERVICE_ROLE|PRIVATE|PASSWORD|PASSWD|OPENAI|ANTHROPIC|CLAUDE|GEMINI|GROQ|MISTRAL|DEEPSEEK|OPENROUTER|PERPLEXITY|REPLICATE|HUGGING|HF_TOKEN|COHERE|TOGETHER|ELEVENLABS|RESEND|SENDGRID|MAILGUN|POSTMARK|TWILIO_AUTH|AUTH_TOKEN|ACCESS_TOKEN|ADMIN_KEY|LEMONSQUEEZY|LEMON_SQUEEZY|PADDLE_API|CONVEX_DEPLOY|APPWRITE_API|APPWRITE_KEY)/;
 const DB_PART = /(DATABASE_URL|DB_URL|POSTGRES_URL|MONGODB_URI|MONGO_URI)/;
 const SAFE_SUFFIX = /(_URL|_URI|_ENDPOINT|_MODEL|_BASE|_HOST|_REGION|_VERSION|_ENABLED|_ID|_NAME)$/;
 
@@ -199,12 +279,15 @@ const notRealEnv = (f: SourceFile) => !isRealEnvPath(f.path);
 function hardcodedFinding(ctx: ProjectContext, p: KeyPattern, m: Match): Finding {
   const client = ctx.isClient(m.file);
   const shown = p.id === 'private-key' ? '-----BEGIN … PRIVATE KEY-----' : mask(m.match[0]);
+  const shipped = ctx.isMobileFile(m.file.path)
+    ? `This file is built into your app, and anyone who installs it can unpack the app and copy the key (${shown}).`
+    : `This file is sent to every visitor's browser, so anyone can copy the key (${shown}) and use your account.`;
   return {
     id: p.id,
     severity: client ? 'critical' : p.severity,
     title: `${capitalize(p.name)} is written directly in your code`,
     why: client
-      ? `This file is sent to every visitor's browser, so anyone can copy the key (${shown}) and use your account.`
+      ? shipped
       : `Anyone who can see your code (GitHub, collaborators, AI tools) can copy this key (${shown}) and use your account. Keys belong in environment variables.`,
     location: at(m),
     fixPrompt:
@@ -226,6 +309,8 @@ export const secretsCheck: Check = {
   weight: 3,
   ids: [
     ...KEY_PATTERNS.map((p) => p.id),
+    ...Object.values(CLERK_KEYS).map((p) => p.id),
+    'lemonsqueezy-api-key',
     'database-password',
     'supabase-service-role-key',
     'public-secret-variable',
@@ -244,11 +329,12 @@ export const secretsCheck: Check = {
       for (const m of ctx.find(p.re, notRealEnv)) {
         if (p.id !== 'private-key' && looksLikePlaceholder(m.match[0])) continue;
         if (p.mustLookRandom && !looksRandom(m.match[0], p.mustLookRandom)) continue;
-        const key = `${p.id}|${m.file.path}`;
+        const kind = keyKind(ctx, p, m);
+        const key = `${kind.id}|${m.file.path}`;
         if (seen.has(key)) continue;
         seen.add(key);
         if (++hardcoded > 10) break;
-        out.findings.push(hardcodedFinding(ctx, p, m));
+        out.findings.push(hardcodedFinding(ctx, kind, m));
       }
     }
 
@@ -279,7 +365,15 @@ export const secretsCheck: Check = {
     // 3. Supabase service_role keys (they bypass all database security)
     for (const m of ctx.find(JWT_RE, notRealEnv)) {
       const payload = decodeJwtPayload(m.match[0]);
-      if (payload?.role !== 'service_role') continue;
+      if (payload?.role !== 'service_role') {
+        if (!/lemon[\s_-]?squeezy/i.test(lineTextAt(m.file.content, m.index))) continue;
+        const key = `lemonsqueezy|${m.file.path}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        hardcoded++;
+        out.findings.push(hardcodedFinding(ctx, LEMON_SQUEEZY_KEY, m));
+        continue;
+      }
       const key = `service-role|${m.file.path}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -328,7 +422,10 @@ export const secretsCheck: Check = {
         id: 'public-secret-variable',
         severity: 'critical',
         title: `Secret exposed through the public variable ${name}`,
-        why: `Anything starting with ${prefix} gets copied into your website's JavaScript, so every visitor can read it. That prefix is only for values that are safe to be public.`,
+        why:
+          prefix === 'EXPO_PUBLIC_'
+            ? 'Anything starting with EXPO_PUBLIC_ is built into your app, so anyone who installs it can read it. That prefix is only for values that are safe to be public.'
+            : `Anything starting with ${prefix} gets copied into your website's JavaScript, so every visitor can read it. That prefix is only for values that are safe to be public.`,
         location: loc,
         fixPrompt:
           `My app has an environment variable called ${name} (see ${where(loc)}). Because it starts with ${prefix}, it is bundled into the browser code and anyone can read it. Please:\n` +

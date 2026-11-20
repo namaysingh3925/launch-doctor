@@ -13,6 +13,15 @@ const green = paint('32');
 const yellow = paint('33');
 const cyan = paint('36');
 
+/** "Left out Twin/: a separate git repository inside this folder. Scan it on its own." */
+export function nestedReposNote(repos: string[]): string {
+  const names = repos.slice(0, 3).map((p) => `${p}/`);
+  const more = repos.length > 3 ? ` and ${repos.length - 3} more` : '';
+  return repos.length === 1
+    ? `Left out ${names[0]}: a separate git repository inside this folder. Scan it on its own.`
+    : `Left out ${repos.length} separate git repositories inside this folder (${names.join(', ')}${more}). Scan them on their own.`;
+}
+
 function gradeColor(grade: Grade): (s: string) => string {
   if (grade === 'A' || grade === 'B') return green;
   if (grade === 'C') return yellow;
@@ -73,6 +82,7 @@ export function renderReport(report: Report, opts: { fixFile?: string } = {}): s
   const unit = report.mode === 'live' ? 'request' : 'file';
   lines.push(`  ${dim(`Checked ${report.projectName} · ${plural(report.filesScanned, unit)}${stack}`)}`);
   if (report.truncated) lines.push(`  ${yellow('Very large project: only the first 20,000 files were checked.')}`);
+  if (report.nestedRepos?.length) lines.push(`  ${dim(nestedReposNote(report.nestedRepos))}`);
   lines.push('');
   lines.push(`  ${bold('Overall grade')}  ${badge(report.grade)}   ${report.verdict}`);
   lines.push('');

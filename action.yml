@@ -1,0 +1,73 @@
+name: Launch Doctor
+description: Pre-launch checkup for vibe-coded apps. Grades the project A-F and comments fix prompts on pull requests.
+author: Namay Singh
+branding:
+  icon: activity
+  color: green
+
+inputs:
+  path:
+    description: Folder to check, relative to the repository root.
+    default: .
+  fail-on:
+    description: Lowest severity that fails the step. "critical", "warning" or "never".
+    default: critical
+  comment:
+    description: On pull requests, post a summary comment and inline fix prompts ("true" or "false").
+    default: 'true'
+  args:
+    description: Extra Launch Doctor options, for example "--offline --skip legal".
+    default: ''
+  github-token:
+    description: 'Token for the pull request comments. Needs "pull-requests: write".'
+    default: ${{ github.token }}
+
+outputs:
+  grade:
+    description: Overall grade, A to F.
+    value: ${{ steps.doctor.outputs.grade }}
+  score:
+    description: Overall score, 0 to 100.
+    value: ${{ steps.doctor.outputs.score }}
+  critical:
+    description: Number of critical findings (not counting the baseline).
+    value: ${{ steps.doctor.outputs.critical }}
+  warnings:
+    description: Number of warnings (not counting the baseline).
+    value: ${{ steps.doctor.outputs.warnings }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 22
+
+    - name: Build Launch Doctor
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        npm ci --no-audit --no-fund --ignore-scripts
+        npx tsc
+
+    - name: Run Launch Doctor
+      id: doctor
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        LD_CLI: ${{ github.action_path }}/dist/src/cli.js
+        LD_PATH: ${{ inputs.path }}
+        LD_FAIL_ON: ${{ inputs.fail-on }}
+        LD_COMMENT: ${{ inputs.comment }}
+        LD_ARGS: ${{ inputs.args }}
+      run: |
+        flags=(--no-file)
+        case "$LD_FAIL_ON" in
+          critical | warning) flags+=(--ci --fail-on "$LD_FAIL_ON") ;;
+          never) ;;
+          *) echo "::error::fail-on must be critical, warning or never, not \"$LD_FAIL_ON\""; exit 1 ;;
+        esac
+        if [ "$LD_COMMENT" = "true" ]; then flags+=(--pr-comment); fi
+        # LD_ARGS is split into words on purpose, so several options can be passed in one input.
+        # shellcheck disable=SC2086
+        node "$LD_CLI" "$LD_PATH" "${flags[@]}" $LD_ARGS

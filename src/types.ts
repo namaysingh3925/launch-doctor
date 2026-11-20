@@ -75,6 +75,8 @@ export interface Report {
   ignored: number;
   /** Ids in .launchdoctorignore that no check can produce (probably typos). */
   unknownIgnoreIds: string[];
+  /** Folders left out because they are separate git repositories (they have their own .git folder). */
+  nestedRepos?: string[];
   score: number;
   grade: Grade;
   verdict: string;

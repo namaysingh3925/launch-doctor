@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, utimesSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { sweepStaleDemos } from '../src/demo.js';
 import { runDoctor } from '../src/index.js';
 import { matchesGitignore, packageNameOf } from '../src/project.js';
+import { nestedReposNote, renderReport } from '../src/report.js';
 import { category, fakeKey, git, hasGit, ids, makeProject } from './helpers.js';
 
 const opts = { offline: true, useGit: false };
@@ -650,4 +657,90 @@ test('a launch-doctor-ignore comment silences one finding at that spot only', as
   assert.deepEqual(live, ['server/c.ts'], 'only the file whose comment names a different id is still reported');
   assert.ok(!ids(report).includes('supabase-rls-missing'));
   assert.equal(report.ignored, 6);
+});
+
+// ---- 0.3.0: found by testing Launch Doctor with Twin ----
+
+const nestedProject = () =>
+  makeProject({
+    'package.json': '{"name":"host-app"}',
+    'index.js': 'console.log("hello")\n',
+    'tools/other-project/package.json': '{"name":"someone-elses-tool"}',
+    'tools/other-project/leak.js': `export const k = "${fakeKey('sk_' + 'live_', 24)}";\n`,
+  });
+
+test('a separate git repository inside the project is left out of the scan', { skip: !hasGit() }, async () => {
+  const dir = nestedProject();
+  git(dir, 'init', '-q');
+  git(join(dir, 'tools/other-project'), 'init', '-q');
+  const report = await runDoctor(dir, { offline: true });
+  assert.deepEqual(report.nestedRepos, ['tools/other-project']);
+  assert.ok(!ids(report).includes('stripe-live-key'), 'the other project is not this app');
+  assert.match(renderReport(report), /Left out tools\/other-project\/: a separate git repository/);
+});
+
+test('without git, a folder with its own .git is still scanned', async () => {
+  const dir = nestedProject();
+  mkdirSync(join(dir, 'tools/other-project/.git'));
+  const report = await runDoctor(dir, opts);
+  assert.equal(report.nestedRepos, undefined);
+  assert.ok(ids(report).includes('stripe-live-key'));
+});
+
+test('git submodules are scanned, git worktrees are not', { skip: !hasGit() }, async () => {
+  const dir = nestedProject();
+  git(dir, 'init', '-q');
+  // A submodule's .git is a file that points into the parent's .git/modules.
+  writeFileSync(join(dir, 'tools/other-project/.git'), 'gitdir: ../../.git/modules/other-project\n');
+  const withSubmodule = await runDoctor(dir, { offline: true });
+  assert.equal(withSubmodule.nestedRepos, undefined);
+  assert.ok(ids(withSubmodule).includes('stripe-live-key'), 'a submodule ships with the app');
+
+  // A worktree's .git file points at .git/worktrees/<name>: a second checkout of the same code.
+  writeFileSync(join(dir, 'tools/other-project/.git'), 'gitdir: /somewhere/repo/.git/worktrees/other-project\n');
+  const withWorktree = await runDoctor(dir, { offline: true });
+  assert.deepEqual(withWorktree.nestedRepos, ['tools/other-project']);
+});
+
+test('nested repository note reads well for one and for several', () => {
+  assert.equal(
+    nestedReposNote(['Twin']),
+    'Left out Twin/: a separate git repository inside this folder. Scan it on its own.',
+  );
+  assert.equal(
+    nestedReposNote(['a', 'b', 'c', 'd']),
+    'Left out 4 separate git repositories inside this folder (a/, b/, c/ and 1 more). Scan them on their own.',
+  );
+});
+
+test('demo folders left behind by killed runs are removed, and nothing else', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'ld-sweep-'));
+  const twoHoursAgo = (Date.now() - 2 * 60 * 60 * 1000) / 1000;
+  const stale = join(tmp, 'launch-doctor-demo-stale');
+  const fresh = join(tmp, 'launch-doctor-demo-running');
+  const other = join(tmp, 'someone-elses-folder');
+  for (const d of [stale, fresh, other]) mkdirSync(d);
+  utimesSync(stale, twoHoursAgo, twoHoursAgo);
+  utimesSync(other, twoHoursAgo, twoHoursAgo);
+  assert.equal(sweepStaleDemos(Date.now(), tmp), 1);
+  assert.ok(!existsSync(stale));
+  assert.ok(existsSync(fresh), 'a demo that is running right now is left alone');
+  assert.ok(existsSync(other), 'folders that are not ours are never touched');
+});
+
+test('Ctrl+C during --demo still removes its temp folder', { skip: process.platform === 'win32' }, async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'ld-sigint-'));
+  const cli = fileURLToPath(new URL('../src/cli.js', import.meta.url));
+  const child = spawn(process.execPath, [cli, '--demo'], {
+    env: { ...process.env, TMPDIR: tmp, NO_COLOR: '1' },
+    stdio: 'ignore',
+  });
+  const demoFolders = () => readdirSync(tmp).filter((n) => n.startsWith('launch-doctor-demo-'));
+  const started = Date.now();
+  while (!demoFolders().length && Date.now() - started < 10_000) await new Promise((r) => setTimeout(r, 5));
+  assert.ok(demoFolders().length, 'the demo folder appeared');
+  child.kill('SIGINT');
+  const code = await new Promise<number | null>((r) => child.on('close', (c) => r(c)));
+  assert.deepEqual(demoFolders(), [], 'no demo folder left behind');
+  assert.ok(code === 130 || code === 0, `exit code ${code}`);
 });

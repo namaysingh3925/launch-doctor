@@ -5,13 +5,17 @@ import { appCode, emptyOutput, notApplicable } from './common.js';
 
 const POLICY_SERVICES = /iubenda\.com|termly\.io|termsfeed\.com|getterms\.io|privacypolicies\.com|termageddon\.com/;
 
-/** Is there a page (file or link) for one of these words? */
-function hasPage(ctx: ProjectContext, words: string[]): boolean {
+/** Is there a page (file or link) for one of these words? fullUrls: also count https://site/<word> links. */
+function hasPage(ctx: ProjectContext, words: string[], fullUrls = false): boolean {
   const alt = words.join('|');
   const pathRe = new RegExp(`(^|/|-|_)(${alt})([/._-]|$)`, 'i');
   if (ctx.paths.some((p) => pathRe.test(p) && (isCodeFile(p) || /\.(md|mdx|html|txt|pdf)$/i.test(p)))) return true;
   const linkRe = new RegExp(`["'\`(]/(?:[\\w-]+/)*(?:${alt})[\\w-]*\\b`, 'i');
-  return ctx.find(linkRe, appCode, 1).length > 0;
+  if (ctx.find(linkRe, appCode, 1).length > 0) return true;
+  if (!fullUrls) return false;
+  // Mobile apps (and many sites) link to a policy hosted elsewhere: https://myapp.com/privacy
+  const urlRe = new RegExp(`https?://[^\\s"'\`]+/(?:[\\w-]+/)*(?:${alt})[\\w-]*\\b`, 'i');
+  return ctx.find(urlRe, appCode, 1).length > 0;
 }
 
 export const legalCheck: Check = {
@@ -20,8 +24,10 @@ export const legalCheck: Check = {
   weight: 1,
   ids: ['no-privacy-policy', 'no-terms', 'no-refund-policy', 'no-contact', 'no-account-deletion', 'cookie-consent'],
   run(ctx) {
-    if (!ctx.isWebApp) return notApplicable('Not a web app');
+    if (!ctx.isWebApp && !ctx.isMobileApp) return notApplicable('Not a web app');
     const out = emptyOutput();
+    // The App Store asks every app for a privacy policy link, whatever it collects.
+    const storeApp = ctx.isMobileApp;
 
     const auth = detectAuth(ctx);
     const payments = detectPayments(ctx);
@@ -33,9 +39,10 @@ export const legalCheck: Check = {
       detectCookieAnalytics(ctx);
     const policyService = ctx.find(POLICY_SERVICES, appCode, 1).length > 0;
 
-    const hasPrivacy = policyService || hasPage(ctx, ['privacy', 'privacy-policy', 'privacypolicy', 'datenschutz']);
+    const hasPrivacy =
+      policyService || hasPage(ctx, ['privacy', 'privacy-policy', 'privacypolicy', 'datenschutz'], true);
     const hasTerms =
-      policyService || hasPage(ctx, ['terms', 'tos', 'terms-of-service', 'terms-and-conditions', 'terms-of-use']);
+      policyService || hasPage(ctx, ['terms', 'tos', 'terms-of-service', 'terms-and-conditions', 'terms-of-use'], true);
     const hasRefund = hasPage(ctx, [
       'refund',
       'refunds',
@@ -46,18 +53,24 @@ export const legalCheck: Check = {
     ]);
     const hasContact = hasPage(ctx, ['contact', 'contact-us']) || ctx.find(/mailto:/, appCode, 1).length > 0;
 
-    if (collectsData) {
+    if (collectsData || storeApp) {
       if (hasPrivacy) out.passed.push('Has a privacy policy');
       else {
         out.findings.push({
           id: 'no-privacy-policy',
           severity: 'warning',
-          title: 'No privacy policy page',
-          why: "Your app collects personal data (accounts, emails, payments or analytics). Privacy laws like GDPR and India's DPDP Act expect a privacy policy, and Google sign-in, Stripe and app stores ask for one.",
+          title: storeApp && !ctx.isWebApp ? 'No privacy policy link in the app' : 'No privacy policy page',
+          why: storeApp
+            ? "The App Store requires a privacy policy link for every app, and Google Play asks for one when an app handles personal data. Privacy laws like GDPR and India's DPDP Act expect one too."
+            : "Your app collects personal data (accounts, emails, payments or analytics). Privacy laws like GDPR and India's DPDP Act expect a privacy policy, and Google sign-in, Stripe and app stores ask for one.",
           fixPrompt:
-            'Create a /privacy page for my app with a clear, plain-English privacy policy. Base it on what the code actually does: list what personal data is collected, ' +
-            'which third-party services receive it (look at my dependencies, e.g. auth, database, email, analytics, payments), how long it is kept, and how users can ask for deletion. ' +
-            "Link it from the footer and the sign-up form. Add a note that I should have it reviewed, since you're not a lawyer.",
+            storeApp && !ctx.isWebApp
+              ? 'Write a clear, plain-English privacy policy for my mobile app and help me publish it at a public URL (for example a page on my website). Base it on what the code actually does: ' +
+                'what personal data is collected, which SDKs and services receive it (look at my dependencies: auth, database, analytics, crash reporting, payments), how long it is kept, and how users can ask for deletion. ' +
+                "Link it from the app's settings and sign-up screens, and remind me to paste the URL into App Store Connect and Google Play Console. Add a note that I should have it reviewed, since you're not a lawyer."
+              : 'Create a /privacy page for my app with a clear, plain-English privacy policy. Base it on what the code actually does: list what personal data is collected, ' +
+                'which third-party services receive it (look at my dependencies, e.g. auth, database, email, analytics, payments), how long it is kept, and how users can ask for deletion. ' +
+                "Link it from the footer and the sign-up form. Add a note that I should have it reviewed, since you're not a lawyer.",
         });
       }
     }
@@ -131,7 +144,7 @@ export const legalCheck: Check = {
       });
     }
 
-    if (!collectsData && !payments && !auth) {
+    if (!collectsData && !payments && !auth && !storeApp) {
       out.passed.push("Your app doesn't seem to collect personal data");
     }
 

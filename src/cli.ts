@@ -2,13 +2,15 @@
 import { appendFileSync, existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { applyBaseline, BASELINE_FILE, loadBaseline, writeBaseline } from './baseline.js';
-import { createDemoProject } from './demo.js';
+import { createDemoProject, removeOnSignal } from './demo.js';
 import { renderFixes } from './fixes.js';
+import { explainGitHubError, postPrFeedback, prContextFromEnv } from './github.js';
 import { failingFindings } from './grade.js';
 import { DEFAULT_HISTORY_DEPTH } from './history.js';
 import { CATEGORY_IDS, runDoctor } from './index.js';
 import { runInit } from './init.js';
 import { runLiveScan } from './live.js';
+import { runMcpServer } from './mcp.js';
 import { bold, dim, renderReport } from './report.js';
 import { renderSarif } from './sarif.js';
 import { renderStepSummary } from './summary.js';
@@ -22,6 +24,7 @@ const HELP = `
     npx launch-doctor [folder] [options]
     npx launch-doctor init [folder]     Create .launchdoctorignore and a GitHub Actions workflow
     npx launch-doctor scan <url>        Check your deployed site (exposed files, source maps, open Supabase tables, headers)
+    npx launch-doctor mcp               Start an MCP server so Claude Code, Cursor and other AI tools can run checks
 
   ${bold('Options')}
     --domain <domain>     Domain you send email from (checks SPF / DKIM / DMARC)
@@ -29,6 +32,7 @@ const HELP = `
     --no-file             Don't write the fix prompts file
     --json                Print the full report as JSON (no fix file unless --out is given)
     --sarif <file>        Also write a SARIF 2.1.0 file (for GitHub code scanning)
+    --pr-comment          On a GitHub pull request, post a summary comment and inline fix prompts
     --offline             Skip network checks (email DNS)
     --ci                  Exit with code 1 on findings at or above --fail-on (no fix file unless --out)
     --fail-on <level>     With --ci, the lowest severity that fails: critical (default) or warning
@@ -54,6 +58,8 @@ const HELP = `
 
   ${bold('GitHub Actions')}
     When GITHUB_STEP_SUMMARY is set, a Markdown summary is added to the job summary page.
+    When GITHUB_OUTPUT is set, the grade, score and counts are saved as step outputs.
+    --pr-comment needs GITHUB_TOKEN and "permissions: pull-requests: write".
 
   ${bold('Examples')}
     npx launch-doctor
@@ -73,6 +79,7 @@ interface Args {
   only?: string[];
   skip?: string[];
   sarif?: string;
+  prComment: boolean;
   updateBaseline: boolean;
   baseline: boolean;
   history: boolean;
@@ -89,6 +96,7 @@ function parseArgs(argv: string[]): Args {
     offline: false,
     ci: false,
     failOn: 'critical',
+    prComment: false,
     updateBaseline: false,
     baseline: true,
     history: false,
@@ -110,6 +118,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--offline') args.offline = true;
     else if (a === '--ci') args.ci = true;
     else if (a === '--demo') args.demo = true;
+    else if (a === '--pr-comment') args.prComment = true;
     else if (a === '--no-file') args.writeFile = false;
     else if (a === '--update-baseline') args.updateBaseline = true;
     else if (a === '--no-baseline') args.baseline = false;
@@ -187,6 +196,32 @@ function init(argv: string[]): void {
   const { created, skipped } = runInit(root);
   for (const f of created) process.stdout.write(`  created  ${f}\n`);
   for (const f of skipped) process.stdout.write(`  skipped  ${f} ${dim('(already exists)')}\n`);
+}
+
+const MCP_HELP = `
+  ${bold('launch-doctor mcp')} - an MCP server for Claude Code, Cursor and other AI coding tools
+
+  ${bold('Usage')}
+    npx launch-doctor mcp      Your AI tool starts this itself and talks to it over stdin and stdout
+
+  ${bold('Tools it offers')}
+    scan_project   Check a project folder: grade, findings with fix prompts, and the checklist
+    scan_url       Check a deployed site from the outside
+    list_checks    List the categories and finding ids
+
+  ${bold('Set it up')}
+    Claude Code    claude mcp add launch-doctor -- npx -y launch-doctor mcp
+    Cursor         add to .cursor/mcp.json:
+                   { "mcpServers": { "launch-doctor": { "command": "npx", "args": ["-y", "launch-doctor", "mcp"] } } }
+`;
+
+async function mcp(argv: string[]): Promise<void> {
+  if (argv.some((a) => a === '-h' || a === '--help')) {
+    process.stdout.write(MCP_HELP);
+    return;
+  }
+  if (argv.length) fail(`mcp doesn't take options (got ${argv.join(' ')}). Run "launch-doctor mcp --help" for setup.`);
+  await runMcpServer();
 }
 
 const SCAN_HELP = `
@@ -275,6 +310,7 @@ async function scan(argv: string[]): Promise<void> {
       // the summary is optional
     }
   }
+  writeStepOutputs(report);
 
   if (json)
     process.stdout.write(`${JSON.stringify(report, null, 2)}
@@ -283,9 +319,46 @@ async function scan(argv: string[]): Promise<void> {
   if (ci && failingFindings(report, failOn).length > 0) process.exitCode = 1;
 }
 
+/** On GitHub Actions, save the grade and counts as step outputs (steps.<id>.outputs.grade and so on). */
+function writeStepOutputs(report: Report): void {
+  const file = process.env.GITHUB_OUTPUT;
+  if (!file) return;
+  const lines = [
+    `grade=${report.grade}`,
+    `score=${report.score}`,
+    `critical=${report.counts.critical}`,
+    `warnings=${report.counts.warning}`,
+  ];
+  try {
+    appendFileSync(file, `${lines.join('\n')}\n`);
+  } catch (err) {
+    process.stderr.write(`${dim(`Couldn't write the GitHub step outputs: ${(err as Error).message}`)}\n`);
+  }
+}
+
+/** --pr-comment: post the results to the pull request. Never fails the run; problems are explained on stderr. */
+async function commentOnPr(report: Report, root: string): Promise<void> {
+  const ctx = prContextFromEnv(root);
+  if (typeof ctx === 'string') {
+    process.stderr.write(`\n  ${dim(`--pr-comment: skipped, ${ctx}.`)}\n`);
+    return;
+  }
+  try {
+    const r = await postPrFeedback(report, ctx);
+    const parts = [`summary comment ${r.summary}`, `${r.posted} new inline comment${r.posted === 1 ? '' : 's'}`];
+    if (r.alreadyPosted) parts.push(`${r.alreadyPosted} already posted earlier`);
+    if (r.overLimit) parts.push(`${r.overLimit} more listed in the summary only`);
+    process.stderr.write(`\n  ${dim(`Pull request #${ctx.number}: ${parts.join(', ')}.`)}\n`);
+    if (r.inlineError) process.stderr.write(`  ${dim(r.inlineError)}\n`);
+  } catch (err) {
+    process.stderr.write(`\n  ${dim(explainGitHubError(err))}\n`);
+  }
+}
+
 async function main(): Promise<void> {
   if (process.argv[2] === 'init') return init(process.argv.slice(3));
   if (process.argv[2] === 'scan') return scan(process.argv.slice(3));
+  if (process.argv[2] === 'mcp') return mcp(process.argv.slice(3));
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     process.stdout.write(HELP);
@@ -296,9 +369,14 @@ async function main(): Promise<void> {
     return;
   }
 
+  let stopDemoCleanup: (() => void) | undefined;
   if (args.demo) {
     if (args.path) fail('--demo scans a built-in sample app, so leave out the folder');
-    args.path = createDemoProject();
+    // Ctrl+C mid-scan would otherwise skip the finally below and leave the folder in the temp directory.
+    let demoDir: string | undefined;
+    stopDemoCleanup = removeOnSignal(() => demoDir);
+    demoDir = createDemoProject();
+    args.path = demoDir;
     args.offline = true;
     if (!args.out) args.writeFile = false;
     if (!args.json)
@@ -321,7 +399,10 @@ async function main(): Promise<void> {
     });
   } finally {
     // The demo project lives in a temp folder; always clean it up, even if the scan throws.
-    if (args.demo) rmSync(root, { recursive: true, force: true });
+    if (args.demo) {
+      rmSync(root, { recursive: true, force: true });
+      stopDemoCleanup?.();
+    }
   }
 
   if (report.filesScanned === 0) {
@@ -375,6 +456,9 @@ async function main(): Promise<void> {
       process.stderr.write(`${dim(`Couldn't write the GitHub step summary: ${(err as Error).message}`)}\n`);
     }
   }
+  writeStepOutputs(report);
+
+  if (args.prComment) await commentOnPr(report, root);
 
   if (args.json) process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   else process.stdout.write(renderReport(report, { fixFile }));

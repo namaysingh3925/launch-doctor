@@ -44,9 +44,13 @@ src/
   fixes.ts        LAUNCH_FIXES.md
   sarif.ts        --sarif output
   summary.ts      GitHub Actions job summary
+  github.ts       --pr-comment: pull request summary comment and inline review comments
+  mcp.ts          `launch-doctor mcp`: the MCP server (JSON-RPC over stdio) and its tools
+  live.ts         `launch-doctor scan <url>`
   init.ts         files created by `launch-doctor init`
   demo.ts         the sample project used by --demo
 test/             node:test tests; projects are built in temp folders
+action.yml        the GitHub Action (builds from source, then runs the CLI with --pr-comment)
 ```
 
 ## Adding a check, step by step
@@ -97,3 +101,9 @@ Never commit a string that looks like a real secret, even a fake one. GitHub pus
 - [ ] `README.md` updated (check table, CLI reference) if behaviour or flags changed
 - [ ] `CHANGELOG.md` has a line under "Unreleased"
 - [ ] No real-looking secrets in test data
+
+## Releasing
+
+1. Move the "Unreleased" notes in `CHANGELOG.md` under a new `## [x.y.z] - YYYY-MM-DD` heading, update the links at the bottom, and set the same version in `package.json` (`npm version x.y.z --no-git-tag-version`).
+2. Merge that to `main`, then tag the merge commit and push the tag: `git tag vx.y.z && git push origin vx.y.z`.
+3. The Release workflow tests the tag, creates the GitHub release from the CHANGELOG section, moves the `v0` tag so `uses: namaysingh3925/launch-doctor@v0` gets the new version, and publishes to npm when the `NPM_TOKEN` repository secret is set.

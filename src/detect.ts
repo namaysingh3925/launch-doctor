@@ -52,6 +52,8 @@ export function detectDatabase(ctx: ProjectContext): string[] {
     ['better-sqlite3', 'SQLite'],
     ['sqlite3', 'SQLite'],
     ['convex', 'Convex'],
+    ['appwrite', 'Appwrite'],
+    ['node-appwrite', 'Appwrite'],
     ['@vercel/postgres', 'Vercel Postgres'],
     ['typeorm', 'TypeORM'],
     ['sequelize', 'Sequelize'],
@@ -82,7 +84,12 @@ export function detectPayments(ctx: ProjectContext): boolean {
       '@paypal/checkout-server-sdk',
       'cashfree-pg',
       '@cashfreepayments/cashfree-js',
-    ]) || ctx.find(/https:\/\/buy\.stripe\.com\/|checkout\.razorpay\.com/, appCode, 1).length > 0
+    ]) ||
+    ctx.find(
+      /https:\/\/buy\.stripe\.com\/|checkout\.razorpay\.com|\.lemonsqueezy\.com\/(?:checkout|buy)\/|cdn\.paddle\.com\/paddle\//,
+      appCode,
+      1,
+    ).length > 0
   );
 }
 

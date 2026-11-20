@@ -1,23 +1,26 @@
 name: Release
 
-# Publishes to npm when a version tag (for example v0.2.0) is pushed.
-# Needs an NPM_TOKEN repository secret with publish rights.
+# Runs when a version tag (for example v0.3.0) is pushed:
+# 1. tests, and a check that the tag matches package.json,
+# 2. a GitHub release with that version's CHANGELOG.md section as the notes,
+# 3. moves the major tag (v0) to this release, so `uses: namaysingh3925/launch-doctor@v0` gets it,
+# 4. publishes to npm, but only when an NPM_TOKEN repository secret is set.
 
 on:
   push:
     tags: ['v*.*.*']
 
 permissions:
-  contents: read
+  contents: write # create the GitHub release and move the major tag
   id-token: write # for npm provenance
 
 jobs:
-  publish:
-    name: Publish to npm
+  release:
+    name: Release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -29,9 +32,41 @@ jobs:
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           PKG_VERSION="$(node -p "require('./package.json').version")"
           if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
             exit 1
           fi
-      - run: npm publish --provenance --access public
+      - name: Release notes from CHANGELOG.md
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::CHANGELOG.md has no \"## [$VERSION]\" section"
+            exit 1
+          fi
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "The $GITHUB_REF_NAME release already exists."
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md --verify-tag
+          fi
+      - name: Move the major tag for the GitHub Action
+        run: |
+          MAJOR="${GITHUB_REF_NAME%%.*}"
+          git tag -f "$MAJOR" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$MAJOR"
+      - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::notice::No NPM_TOKEN secret, so this release was not published to npm."
+            exit 0
+          fi
+          npm publish --provenance --access public

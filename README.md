@@ -155,16 +155,18 @@ flowchart LR
 
 | Category | What it catches | Severity range |
 |---|---|---|
-| Secrets & keys (`secrets`) | Stripe, OpenAI, Anthropic, OpenRouter, Groq, Hugging Face, Supabase, AWS, GitHub, Slack, SendGrid, and Resend keys in code; Supabase `service_role` keys; private keys; database URLs with passwords; secrets in `NEXT_PUBLIC_` / `VITE_` variables; `.env` files committed or not in `.gitignore`; with `--history`, keys still in git history | Warning to critical |
-| Database & backups (`database`) | Supabase tables without Row Level Security; policies that let anyone write (`using (true)`); write policies open to any signed-in user; Firebase test-mode or open rules; SQLite on serverless hosting; `prisma db push` / `--accept-data-loss` instead of migrations | Warning to critical |
-| Payments (`payments`) | Stripe webhooks that don't verify the signature (each route checked separately); webhooks or global `express.json()` that parse the body before verifying; no webhook at all; Razorpay payments never verified on the server | Warning to critical |
+| Secrets & keys (`secrets`) | Stripe, Clerk, OpenAI, Anthropic, OpenRouter, Groq, Hugging Face, Supabase, AWS, GitHub, Slack, SendGrid, Resend, Paddle, Convex, Appwrite, and Lemon Squeezy keys in code; Supabase `service_role` keys; private keys; database URLs with passwords; secrets in `NEXT_PUBLIC_` / `VITE_` / `EXPO_PUBLIC_` variables; keys in mobile app code (they ship inside the app); `.env` files committed or not in `.gitignore`; with `--history`, keys still in git history | Warning to critical |
+| Database & backups (`database`) | Supabase tables without Row Level Security; policies that let anyone write (`using (true)`); write policies open to any signed-in user; Firebase test-mode or open rules; Convex mutations and actions anyone can call without signing in; Appwrite permissions that let anyone (or every signed-in user) change data; SQLite on serverless hosting; `prisma db push` / `--accept-data-loss` instead of migrations | Warning to critical |
+| Payments (`payments`) | Stripe, Lemon Squeezy, and Paddle webhooks that don't verify the signature (each route checked separately); webhooks or global `express.json()` that parse the body before verifying, or sign re-encoded JSON; no webhook at all; Razorpay payments never verified on the server | Warning to critical |
 | AI & API costs (`costs`) | Paid AI or SMS APIs called from the browser; `dangerouslyAllowBrowser: true`; AI endpoints with no login check (middleware only counts if it really blocks `/api`); no real rate limiter | Warning to critical |
 | Email delivery (`email`) | Resend's test sender; personal Gmail SMTP; sender domains that don't exist; missing SPF or DMARC (live DNS check); Supabase's built-in test mailer | Warning |
-| Errors & monitoring (`monitoring`) | No error tracking (Sentry, PostHog, and others); no error boundary or `error.tsx`, so crashes show a blank page | Warning |
-| Legal & trust (`legal`) | No privacy policy, terms, refund policy, or contact page; no way for users to delete their account; cookie analytics without consent | Warning |
-| First impressions (`first-impressions`) | "Vite + React" / "Create Next App" titles and descriptions; Vite favicon; Lovable default meta tags; no description or social preview image; hard-coded `localhost` URLs | Warning |
+| Errors & monitoring (`monitoring`) | No error tracking or crash reporting (Sentry, PostHog, Crashlytics, and others); no error boundary or `error.tsx`, so crashes show a blank page | Warning |
+| Legal & trust (`legal`) | No privacy policy, terms, refund policy, or contact page; no way for users to delete their account; cookie analytics without consent; a store app with no privacy policy link | Warning |
+| First impressions (`first-impressions`) | "Vite + React" / "Create Next App" titles and descriptions; Vite favicon; Lovable default meta tags; no description or social preview image; hard-coded `localhost` URLs. For mobile apps: placeholder app IDs (`com.anonymous...`), cleartext HTTP on Android, `NSAllowsArbitraryLoads` on iOS, development addresses like `10.0.2.2` | Warning |
 
-Each category also adds **"check yourself"** items for things code cannot show, such as automated database backups, provider spending limits, a real test purchase, and uptime monitoring. Monitoring, legal, and first impressions checks only run on web apps (a frontend framework, server routes, or an `index.html`). Command-line tools and libraries skip them automatically.
+Each category also adds **"check yourself"** items for things code cannot show, such as automated database backups, provider spending limits, a real test purchase, uptime monitoring, switching Clerk to a production instance, and the app store listing and privacy forms.
+
+Monitoring, legal, and first impressions checks run on web apps (a frontend framework, server routes, or an `index.html`) and on mobile apps (Expo and React Native), which get mobile versions of them: crash reporting, a privacy policy link for the stores, app ID and network security settings, and a store-readiness checklist. Command-line tools and libraries skip them automatically. In a monorepo with a website and an app, both sets run. A folder inside your project that is a separate git repository (it has its own `.git` folder and isn't a submodule) is left out, and the report says so.
 
 ## Live site scan
 
@@ -198,6 +200,7 @@ The report uses the same grades and `--json`, `--ci`, `--fail-on`, `--out` and `
 npx launch-doctor [folder] [options]
 npx launch-doctor init [folder]
 npx launch-doctor scan <url> [options]
+npx launch-doctor mcp
 ```
 
 | Flag | Default | Description |
@@ -208,6 +211,7 @@ npx launch-doctor scan <url> [options]
 | `--no-file` | off | Don't write the fix prompts file |
 | `--json` | off | Print the full report as JSON (no fix file unless `--out` is given) |
 | `--sarif <file>` | off | Also write a SARIF 2.1.0 file for GitHub code scanning |
+| `--pr-comment` | off | On a GitHub pull request, post a summary comment and inline fix prompts (see [Pull request comments](#pull-request-comments)) |
 | `--offline` | off | Skip network checks (email DNS) |
 | `--ci` | off | Exit with code 1 on findings at or above `--fail-on` (no fix file unless `--out`) |
 | `--fail-on <level>` | `critical` | With `--ci`, the lowest severity that fails: `critical` or `warning` |
@@ -222,6 +226,7 @@ npx launch-doctor scan <url> [options]
 | `-v`, `--version` | | Show the version |
 | `init [folder]` | `.` | Create `.launchdoctorignore` and `.github/workflows/launch-doctor.yml` (never overwrites) |
 | `scan <url>` | | Check your deployed site from the outside (see [Live site scan](#live-site-scan)) |
+| `mcp` | | Start an MCP server so AI coding tools can run checks themselves (see [MCP server](#mcp-server)) |
 | `--no-db` | off | With `scan`, don't test Supabase tables with the public key found in the page |
 
 Category ids for `--only` and `--skip`: `secrets`, `database`, `payments`, `costs`, `email`, `monitoring`, `legal`, `first-impressions`. Skipped categories show as "skipped" and don't count toward the grade.
@@ -285,8 +290,8 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: npx launch-doctor --ci
@@ -294,6 +299,7 @@ jobs:
 
 - **Severity gating:** By default, `--ci` exits with code 1 only on critical findings. Add `--fail-on warning` to fail builds on warnings as well.
 - **Job summaries:** When running in GitHub Actions, Launch Doctor automatically writes a markdown summary (including overall grade, category scorecard, and itemized issues with file and line links) to the GitHub Actions job summary tab via `GITHUB_STEP_SUMMARY`.
+- **Step outputs:** When `GITHUB_OUTPUT` is set, the `grade`, `score`, `critical` and `warnings` values are saved as step outputs.
 - **Code scanning alerts:** Export findings to SARIF 2.1.0 format to populate alerts directly in your repository Security tab:
 
 ```yaml
@@ -303,6 +309,40 @@ jobs:
         with:
           sarif_file: launch-doctor.sarif
 ```
+
+### Pull request comments
+
+The Launch Doctor GitHub Action reviews each pull request like a teammate would:
+
+- **Inline comments** on the lines the pull request adds, each with the plain-English risk, a fix prompt you can paste into your AI tool, and the `launch-doctor-ignore` comment that silences it.
+- **One summary comment** with the grade, what this pull request added, what was already in the project, and the category scorecard. It is edited in place on every push, not posted again.
+- Findings that were already commented on are not repeated, findings in `.launchdoctor-baseline.json` are left out, and each run posts at most 20 inline comments (the rest are listed in the summary).
+
+```yaml
+name: Launch Doctor
+on: [pull_request]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: namaysingh3925/launch-doctor@v0
+```
+
+| Input | Default | Description |
+|---|---|---|
+| `path` | `.` | Folder to check, relative to the repository root |
+| `fail-on` | `critical` | Lowest severity that fails the check: `critical`, `warning` or `never` |
+| `comment` | `true` | Post the summary and inline comments on pull requests |
+| `args` | | Extra options, for example `--offline --skip legal` |
+| `github-token` | `${{ github.token }}` | Token used for the comments |
+
+The action also sets the `grade`, `score`, `critical` and `warnings` outputs. Pull requests from forks get a read-only token, so they can't be commented on; the check still runs and the job summary still has the results.
+
+Using the CLI directly instead? Add `--pr-comment` and pass the token: `npx launch-doctor --ci --pr-comment` with `env: GITHUB_TOKEN: ${{ github.token }}`.
 
 ## Using with AI coding tools
 
@@ -323,6 +363,36 @@ Fix the issues in LAUNCH_FIXES.md one at a time, starting with the critical ones
 4. Review and accept the code edit.
 5. Re-run `npx launch-doctor` to observe your score improve.
 
+### MCP server
+
+`launch-doctor mcp` starts a [Model Context Protocol](https://modelcontextprotocol.io) server, so your AI assistant can run the checkup itself, read the findings and fix them without you copying anything.
+
+**Claude Code:**
+
+```bash
+claude mcp add launch-doctor -- npx -y launch-doctor mcp
+```
+
+**Cursor** (`.cursor/mcp.json`) and other tools that use the same format:
+
+```json
+{
+  "mcpServers": {
+    "launch-doctor": { "command": "npx", "args": ["-y", "launch-doctor", "mcp"] }
+  }
+}
+```
+
+Then ask: *"Run Launch Doctor on this project and fix the critical findings one at a time."*
+
+| Tool | What it does |
+|---|---|
+| `scan_project` | Checks a folder (default: the one the assistant works in). Returns the grade, every finding with its file, line, explanation and fix prompt, and the checklist of things to verify by hand. Options: `path`, `only`, `skip`, `offline`, `domain`, `history`, `includeBaseline`. |
+| `scan_url` | Checks a deployed site from the outside, like `launch-doctor scan <url>`. Options: `url`, `skipDatabase`. |
+| `list_checks` | Lists the categories and every finding id, for `only`, `skip` and `.launchdoctorignore`. |
+
+The tools only read: nothing is written to your project, and results also come back as structured data for clients that use it. The server speaks MCP over stdio (protocol versions 2024-11-05 to 2025-11-25) and has no dependencies.
+
 ## Privacy and network use
 
 Launch Doctor analyzes your codebase locally on your device. Your source code, findings, and credentials are never uploaded to any remote server. Detected secrets are masked in reports (for example, `sk_live_…exe9`).
@@ -330,6 +400,8 @@ Launch Doctor analyzes your codebase locally on your device. Your source code, f
 - **Email DNS validation:** This is the only network check performed. When your project sends transactional email and a domain is identified (either discovered in code or specified via `--domain`), Launch Doctor queries your system DNS resolver for NS and TXT records (including root SPF, `send.<domain>`, `_dmarc.<domain>`, and common DKIM selectors). No code or private data is transmitted. Pass `--offline` to disable DNS lookups entirely. The `--demo` command never touches the network.
 - **Live site scan (`scan <url>`):** sends ordinary `GET` requests to the address you give and to Supabase when your page uses it. Nothing is sent anywhere else, and nothing is uploaded.
 - **Git history analysis (`--history`):** Runs local `git log` commands directly on your system without network requests.
+- **Pull request comments (`--pr-comment`):** calls the GitHub API with the workflow's token to read the pull request's changed files and post comments. It only runs on GitHub Actions and sends finding titles, explanations, fix prompts and file paths, never your source code.
+- **MCP server (`mcp`):** talks to your AI tool over stdin and stdout only; it opens no port. Its tools make the same network calls as the CLI: email DNS lookups for `scan_project` (unless `offline`), and the requests to the site you name for `scan_url`.
 - **Package installation:** standard `npx` retrieval via the npm registry.
 
 ## Limitations
@@ -340,16 +412,17 @@ Launch Doctor provides rapid pre-launch hygiene, not a full penetration test or 
 - It cannot inspect third-party web dashboards. Settings configured via web consoles in Supabase, Firebase, Stripe, or cloud hosts appear on the "check yourself" manual checklist.
 - JavaScript, TypeScript, and Python codebases receive the deepest static analysis coverage.
 - Route analysis works per handler and follows local imports 2 levels deep. Dynamic imports and unusual route shapes may not be followed.
+- For mobile apps, Launch Doctor reads the Expo config (`app.json`, `app.config.*`), `AndroidManifest.xml` and `Info.plist`. Gradle and Xcode project files are not read.
 
 For applications processing significant financial transactions or sensitive personal health data, combine automated checks with a human security review.
 
 ## Roadmap
 
 - [x] Live URL inspection (`launch-doctor scan <url>`: exposed `.env`, source maps, security headers, open Supabase tables via anonymous key)
-- [ ] GitHub Action bot to post interactive review comments on pull requests
-- [ ] Model Context Protocol (MCP) server for direct Claude Code and Cursor integration
-- [ ] Extended provider coverage (Clerk, Convex, Appwrite, Lemon Squeezy, Paddle)
-- [ ] Mobile framework support (Expo, React Native)
+- [x] GitHub Action that posts a summary and inline fix prompts on pull requests ([Pull request comments](#pull-request-comments))
+- [x] Model Context Protocol (MCP) server for direct Claude Code and Cursor integration ([MCP server](#mcp-server))
+- [x] Extended provider coverage (Clerk, Convex, Appwrite, Lemon Squeezy, Paddle)
+- [x] Mobile framework support (Expo, React Native)
 
 ## Contributing
 

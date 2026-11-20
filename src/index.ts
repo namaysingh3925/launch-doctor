@@ -134,6 +134,7 @@ export async function runDoctor(root: string, options: Options = {}): Promise<Re
     truncated: ctx.truncated,
     ignored,
     unknownIgnoreIds,
+    ...(ctx.nestedRepos.length ? { nestedRepos: ctx.nestedRepos } : {}),
     ...summary,
     categories,
     generatedAt: new Date().toISOString(),
@@ -147,6 +148,7 @@ export async function runDoctor(root: string, options: Options = {}): Promise<Re
 }
 
 export { renderFixes } from './fixes.js';
+export { postPrFeedback, prContextFromEnv, renderPrComment } from './github.js';
 export { ProjectContext } from './project.js';
 export { renderReport } from './report.js';
 export type * from './types.js';

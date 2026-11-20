@@ -1,8 +1,45 @@
-import { detectDatabase } from '../detect.js';
-import type { SourceFile } from '../project.js';
+import { detectAuth, detectDatabase } from '../detect.js';
+import { isTestPath, type ProjectContext, type SourceFile } from '../project.js';
 import type { Check, Location } from '../types.js';
 import { lineAt, plural } from '../util.js';
-import { emptyOutput, notApplicable, where } from './common.js';
+import { appCode, at, emptyOutput, notApplicable, where } from './common.js';
+
+// ---------- Convex ----------
+
+/** Public Convex functions that can change data. internalMutation / internalAction can't be called from outside. */
+const CONVEX_PUBLIC_WRITE = /export\s+const\s+(\w+)\s*=\s*(mutation|action)\s*\(/g;
+/** Ways a Convex function finds out who is calling. */
+const CONVEX_AUTH =
+  /ctx\.auth\b|getAuthUserId\s*\(|getAuthSessionId\s*\(|\b(?:requireUser|requireAuth|getCurrentUser|getUserOrThrow|ensureUser|assertUser|currentUser|checkAuth|getViewer|mustGetCurrentUser|getMe)\w*\s*\(/;
+
+const isConvexFunctionFile = (f: SourceFile) =>
+  /(^|\/)convex\/(?!_generated\/).+\.[cm]?[jt]s$/.test(f.path) && !isTestPath(f.path);
+
+/** Public mutations and actions whose body never asks who the caller is. */
+function unprotectedConvexFunctions(ctx: ProjectContext): { name: string; loc: Location }[] {
+  const out: { name: string; loc: Location }[] = [];
+  for (const f of ctx.files.filter(isConvexFunctionFile)) {
+    const code = ctx.codeOf(f);
+    const starts = [...code.matchAll(/^export\s/gm)].map((m) => m.index);
+    for (const m of code.matchAll(CONVEX_PUBLIC_WRITE)) {
+      const next = starts.find((i) => i > m.index) ?? code.length;
+      if (CONVEX_AUTH.test(code.slice(m.index, next))) continue;
+      out.push({ name: m[1]!, loc: { file: f.path, line: lineAt(code, m.index) } });
+    }
+  }
+  return out;
+}
+
+// ---------- Appwrite ----------
+
+/** Document or collection permissions that let anyone (even signed-out visitors) write. */
+const APPWRITE_OPEN = /Permission\.(write|create|update|delete)\s*\(\s*Role\.(any|guests)\s*\(\s*\)\s*\)/;
+/** Update or delete rights for every signed-in user (create for everyone signed in is normal). */
+const APPWRITE_USERS = /Permission\.(write|update|delete)\s*\(\s*Role\.users\s*\(\s*\)\s*\)/;
+/** The same in appwrite.json (the Appwrite CLI config): "update(\"any\")". */
+const APPWRITE_JSON_OPEN = /"(write|create|update|delete)\(\\"(any|guests)\\"\)"/;
+const APPWRITE_JSON_USERS = /"(write|update|delete)\(\\"users\\"\)"/;
+const isAppwriteConfig = (f: SourceFile) => /(^|\/)appwrite(?:\.config)?\.json$/.test(f.path);
 
 /** Remove SQL comments but keep line numbers the same. */
 function stripSqlComments(sql: string): string {
@@ -96,6 +133,10 @@ export const databaseCheck: Check = {
     'supabase-rls-dashboard',
     'firebase-open-rules',
     'firebase-rules-console',
+    'convex-public-mutation',
+    'appwrite-open-permission',
+    'appwrite-signed-in-write',
+    'appwrite-permissions-console',
     'sqlite-on-serverless',
     'prisma-db-push',
     'backups',
@@ -212,6 +253,91 @@ export const databaseCheck: Check = {
       }
     }
 
+    // ---- Convex: public functions that never check who is calling ----
+    if (dbs.includes('Convex')) {
+      const convexFiles = ctx.files.filter(isConvexFunctionFile);
+      // Only an app with accounts has a "who is calling" to check; a public guestbook may write without one.
+      const hasAccounts =
+        !!detectAuth(ctx) ||
+        ctx.uses('@convex-dev/auth') ||
+        convexFiles.some((f) => /ctx\.auth\b|getAuthUserId\s*\(/.test(ctx.codeOf(f)));
+      const anyPublicWrite = convexFiles.some((f) => new RegExp(CONVEX_PUBLIC_WRITE.source).test(ctx.codeOf(f)));
+      const open = hasAccounts ? unprotectedConvexFunctions(ctx) : [];
+      if (open.length) {
+        const names = open.slice(0, 5).map((o) => o.name);
+        const more = open.length > 5 ? ` and ${open.length - 5} more` : '';
+        out.findings.push({
+          id: 'convex-public-mutation',
+          severity: 'warning',
+          title: `${plural(open.length, 'Convex function')} anyone can call without signing in: ${names.join(', ')}${more}`,
+          why: 'Every mutation and action exported from your convex/ folder is a public API. Your Convex URL is inside your app, so anyone can call these directly, signed in or not. These never check who is calling, so anyone can change data through them.',
+          location: open[0]!.loc,
+          fixPrompt:
+            `These Convex functions never check who is calling: ${open.map((o) => `${o.name} (${where(o.loc)})`).join(', ')}. For each one:\n` +
+            `1. At the top of the handler, add: const identity = await ctx.auth.getUserIdentity(); if (!identity) throw new Error("Not signed in");\n` +
+            `2. Before changing a document, check that it belongs to the signed-in user.\n` +
+            `3. If a function is only called by other Convex functions, crons or the scheduler, make it an internalMutation or internalAction instead, so it can't be called from outside.\n` +
+            `Explain each change in one sentence.`,
+        });
+      } else if (hasAccounts && anyPublicWrite) {
+        out.passed.push('Convex mutations check who is calling');
+      }
+    }
+
+    // ---- Appwrite permissions ----
+    if (dbs.includes('Appwrite')) {
+      const inCode = (re: RegExp) => [
+        ...ctx.findCode(re, appCode, 3),
+        ...ctx.find(re === APPWRITE_OPEN ? APPWRITE_JSON_OPEN : APPWRITE_JSON_USERS, isAppwriteConfig, 3),
+      ];
+      const open = inCode(APPWRITE_OPEN);
+      const signedIn = inCode(APPWRITE_USERS);
+      for (const m of open.slice(0, 3)) {
+        const action = m.match[1]!;
+        const who = m.match[2] === 'guests' ? 'signed-out visitors' : 'anyone';
+        const createOnly = action === 'create';
+        out.findings.push({
+          id: 'appwrite-open-permission',
+          severity: createOnly ? 'warning' : 'critical',
+          title: createOnly
+            ? `Appwrite lets ${who} create documents (${action} for ${m.match[2]})`
+            : `Appwrite lets ${who} ${action === 'write' ? 'change and delete' : action} your data`,
+          why: createOnly
+            ? 'Anyone, even people who are not signed in, can add documents here. Fine for something like a contact form, but bots can fill it with junk unless you add a captcha or rate limit.'
+            : 'This permission is granted to "any" (or guests), so anyone on the internet can use your public project ID to change or delete these documents, without signing in.',
+          location: at(m),
+          fixPrompt:
+            `In ${where(at(m))} an Appwrite permission gives "${action}" to Role.${m.match[2]}(). ` +
+            `Please change it so only the document's owner can update or delete it (Permission.update(Role.user(userId)), Permission.delete(Role.user(userId))), ` +
+            `keep public read only if the data is meant to be public, and turn on "Document security" for the collection if documents need per-user permissions. Explain each permission in one sentence.`,
+        });
+      }
+      for (const m of signedIn.slice(0, 3)) {
+        out.findings.push({
+          id: 'appwrite-signed-in-write',
+          severity: 'warning',
+          title: `Appwrite: any signed-in user can ${m.match[1] === 'write' ? 'change and delete' : m.match[1]} these documents`,
+          why: `The permission is granted to Role.users(), which means every account. Anyone who creates a free account can edit or delete other people's documents.`,
+          location: at(m),
+          fixPrompt:
+            `In ${where(at(m))} an Appwrite permission gives "${m.match[1]}" to Role.users(), so every signed-in user can change every document. ` +
+            `Please give update and delete rights only to the owner (Role.user(userId)) when creating each document, with "Document security" turned on for the collection.`,
+        });
+      }
+      const anyPermissions =
+        ctx.findCode(/Permission\.\w+\s*\(\s*Role\./, appCode, 1).length > 0 ||
+        ctx.files.some((f) => isAppwriteConfig(f) && /\$permissions|"permissions"/.test(f.content));
+      if (!anyPermissions) {
+        out.manual.push({
+          id: 'appwrite-permissions-console',
+          title: 'Check your Appwrite collection and bucket permissions',
+          how: 'Open the Appwrite Console → Databases → each collection → Settings → Permissions (and Storage → each bucket). "Any" with create, update or delete lets anyone change your data; give those rights to users or to the document owner instead.',
+        });
+      } else if (!open.length && !signedIn.length) {
+        out.passed.push("Appwrite permissions don't let anyone change other people's data");
+      }
+    }
+
     // ---- SQLite on serverless hosting ----
     const prismaSqlite = ctx.find(/provider\s*=\s*"sqlite"/, (f) => f.path.endsWith('.prisma'), 1)[0];
     const sqliteLib = ctx.usesAny(['better-sqlite3', 'sqlite3']);
@@ -260,7 +386,11 @@ export const databaseCheck: Check = {
       ? 'In Supabase → Database → Backups, check that backups exist for your plan (free projects may not include them). Download or restore one once to be sure it works.'
       : dbs.includes('Firebase')
         ? 'Turn on scheduled Firestore backups (Google Cloud → Firestore → Disaster recovery), then restore one into a test project once.'
-        : 'Turn on automatic daily backups with your database host, then restore one into a test database once to prove it works.';
+        : dbs.includes('Convex')
+          ? 'In the Convex dashboard → your production deployment → Backups, turn on periodic backups, then download or restore one once to be sure it works.'
+          : dbs.includes('Appwrite')
+            ? 'Turn on database backups in the Appwrite Console (Databases → Backups), or back up your server volumes if you host Appwrite yourself, then restore one into a test project once.'
+            : 'Turn on automatic daily backups with your database host, then restore one into a test database once to prove it works.';
     out.manual.push({ id: 'backups', title: 'Turn on automatic backups and test a restore', how });
 
     return out;

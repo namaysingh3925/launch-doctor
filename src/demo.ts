@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -17,9 +17,61 @@ function fakeKey(prefix: string, length: number, seed: number): string {
   return prefix + out;
 }
 
+const DEMO_PREFIX = 'launch-doctor-demo-';
+/** A demo folder older than this was left behind by a run that was killed before it could clean up. */
+const STALE_DEMO_MS = 60 * 60 * 1000;
+
+/**
+ * Remove demo folders that killed runs left in the temp folder. Only folders named
+ * launch-doctor-demo-* that are over an hour old are touched, so a demo running in
+ * another terminal right now is left alone. Returns how many were removed.
+ */
+export function sweepStaleDemos(now = Date.now(), dir = tmpdir()): number {
+  let removed = 0;
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return 0;
+  }
+  for (const name of names) {
+    if (!name.startsWith(DEMO_PREFIX)) continue;
+    const path = join(dir, name);
+    try {
+      const stat = statSync(path);
+      if (!stat.isDirectory() || now - stat.mtimeMs < STALE_DEMO_MS) continue;
+      rmSync(path, { recursive: true, force: true });
+      removed++;
+    } catch {
+      // in use or already gone: leave it
+    }
+  }
+  return removed;
+}
+
+/**
+ * Delete the demo folder if the run is stopped with Ctrl+C (SIGINT), SIGTERM or SIGHUP.
+ * Register it before creating the folder: signal handlers run between JavaScript tasks,
+ * so the folder name is always known by the time one runs.
+ * Returns a function that removes the handlers again once the run has cleaned up normally.
+ */
+export function removeOnSignal(getDir: () => string | undefined): () => void {
+  const codes: Record<string, number> = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 };
+  const handler = (signal: NodeJS.Signals) => {
+    const dir = getDir();
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    process.exit(codes[signal] ?? 1);
+  };
+  for (const signal of Object.keys(codes)) process.once(signal, handler);
+  return () => {
+    for (const signal of Object.keys(codes)) process.removeListener(signal, handler);
+  };
+}
+
 /** Writes a small "weekend project" with the classic launch mistakes and returns its folder. */
 export function createDemoProject(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'launch-doctor-demo-'));
+  sweepStaleDemos();
+  const dir = mkdtempSync(join(tmpdir(), DEMO_PREFIX));
   const openaiKey = fakeKey(['sk', 'proj', ''].join('-'), 40, 3);
   const stripeKey = fakeKey(['sk', 'live', ''].join('_'), 28, 7);
 
